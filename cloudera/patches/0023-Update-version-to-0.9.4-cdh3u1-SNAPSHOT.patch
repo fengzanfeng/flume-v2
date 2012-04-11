@@ -1,0 +1,172 @@
+From 328bc93a740c96d63e0e200d11a394b5115334be Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Tue, 5 Jul 2011 15:26:54 -0700
+Subject: [PATCH 23/65] Update version to 0.9.4-cdh3u1-SNAPSHOT
+
+---
+ RELEASENOTES                            |    7 ++-----
+ flume-config-web/pom.xml                |    2 +-
+ flume-core/pom.xml                      |    2 +-
+ flume-distribution/pom.xml              |    2 +-
+ flume-docs/pom.xml                      |    2 +-
+ flume-log4j-appender/pom.xml            |    2 +-
+ flume-node-web/pom.xml                  |    2 +-
+ flume-windows-dist/pom.xml              |    2 +-
+ plugins/flume-plugin-hbasesink/pom.xml  |    2 +-
+ plugins/flume-plugin-helloworld/pom.xml |    2 +-
+ pom.xml                                 |    2 +-
+ 11 files changed, 12 insertions(+), 15 deletions(-)
+
+diff --git a/RELEASENOTES b/RELEASENOTES
+index 131d94b..6cdb5db 100644
+--- a/RELEASENOTES
++++ b/RELEASENOTES
+@@ -1,13 +1,10 @@
+-Flume 0.9.5
+-===========
++Flume 0.9.4-cdh3u1
++==================
+ 
+ Files written by a collector now have a '.tmp' suffix that indicates
+ that the file is still being written.  When the file is completed,
+ this suffix is removed.
+ 
+-Flume 0.9.4
+-===========
+-
+ NOTE: This release was done in preparation to a move to the Apache
+ Incubator and did not go through the normal release candidate
+ process.
+diff --git a/flume-config-web/pom.xml b/flume-config-web/pom.xml
+index 5354223..6eedd86 100644
+--- a/flume-config-web/pom.xml
++++ b/flume-config-web/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>flume-config-web</artifactId>
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 941481d..1b1df4c 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <name>Flume Core</name>
+diff --git a/flume-distribution/pom.xml b/flume-distribution/pom.xml
+index e8f9feb..7dd0ff7 100644
+--- a/flume-distribution/pom.xml
++++ b/flume-distribution/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>flume-distribution</artifactId>
+diff --git a/flume-docs/pom.xml b/flume-docs/pom.xml
+index 5e0721d..16bfff7 100644
+--- a/flume-docs/pom.xml
++++ b/flume-docs/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <name>Flume Docs</name>
+diff --git a/flume-log4j-appender/pom.xml b/flume-log4j-appender/pom.xml
+index 215f9d0..1d0230f 100644
+--- a/flume-log4j-appender/pom.xml
++++ b/flume-log4j-appender/pom.xml
+@@ -22,7 +22,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <artifactId>flume-log4j-appender</artifactId>
+diff --git a/flume-node-web/pom.xml b/flume-node-web/pom.xml
+index 2800fea..c1b3f23 100644
+--- a/flume-node-web/pom.xml
++++ b/flume-node-web/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <name>Flume Node Web</name>
+diff --git a/flume-windows-dist/pom.xml b/flume-windows-dist/pom.xml
+index 11cb8b0..df83d5e 100644
+--- a/flume-windows-dist/pom.xml
++++ b/flume-windows-dist/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <groupId>com.cloudera</groupId>
+diff --git a/plugins/flume-plugin-hbasesink/pom.xml b/plugins/flume-plugin-hbasesink/pom.xml
+index 9da6ee6..046a91b 100644
+--- a/plugins/flume-plugin-hbasesink/pom.xml
++++ b/plugins/flume-plugin-hbasesink/pom.xml
+@@ -5,7 +5,7 @@
+     <relativePath>../../pom.xml</relativePath>
+     <groupId>com.cloudera</groupId>
+     <artifactId>flume</artifactId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <modelVersion>4.0.0</modelVersion>
+diff --git a/plugins/flume-plugin-helloworld/pom.xml b/plugins/flume-plugin-helloworld/pom.xml
+index 9307da9..22852cf 100644
+--- a/plugins/flume-plugin-helloworld/pom.xml
++++ b/plugins/flume-plugin-helloworld/pom.xml
+@@ -6,7 +6,7 @@
+     <relativePath>../../pom.xml</relativePath>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4</version>
++    <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   </parent>
+ 
+   <groupId>com.cloudera.flume.plugin</groupId>
+diff --git a/pom.xml b/pom.xml
+index 789edcd..76c192d 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -4,7 +4,7 @@
+   <modelVersion>4.0.0</modelVersion>
+   <groupId>com.cloudera</groupId>
+   <artifactId>flume</artifactId>
+-  <version>0.9.4</version>
++  <version>0.9.4-cdh3u1-SNAPSHOT</version>
+   <packaging>pom</packaging>
+   <name>Flume</name>
+ 
+-- 
+1.7.0.4
+

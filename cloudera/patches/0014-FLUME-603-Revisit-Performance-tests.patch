@@ -1,0 +1,2722 @@
+From 288a04fc4221e65e2d18c6ebce6bd906de191fb7 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Sat, 16 Apr 2011 10:57:43 -0700
+Subject: [PATCH 14/65] FLUME-603: Revisit Performance tests
+ - Remove dependencies on non-existing data sets.
+ - Remove reporting tests (not relevent/supported)
+ - Add some accounting to avro sink to present proper MB/s statistitcs on batched datasets
+ - Update Maven build to create "microbenchmarks" profile
+
+---
+ DEVNOTES                                           |   34 +++
+ flume-core/pom.xml                                 |   15 +
+ .../flume/handlers/avro/AvroEventSink.java         |   25 +-
+ .../flume/handlers/thrift/ThriftEventSink.java     |    4 +
+ .../src/main/java/com/cloudera/util/Benchmark.java |    6 +
+ .../org/apache/avro/ipc/AccountingTransceiver.java |   79 ++++++
+ .../agent/diskfailover/TestConcurrentDFOMan.java   |    6 +-
+ .../diskfailover/TestDiskFailoverBehavior.java     |    6 +-
+ .../diskfailover/TestDiskFailoverBenchmarking.java |   18 +-
+ .../agent/diskfailover/TestDiskFailoverDeco.java   |    6 +-
+ .../diskfailover/TestDiskFailoverManager.java      |    8 +-
+ .../agent/durability/TestConcurrentWALMan.java     |    6 +-
+ .../agent/durability/TestNaiveFileWALDeco.java     |   38 ++--
+ .../agent/durability/TestNaiveFileWALHandles.java  |    6 +-
+ .../agent/durability/TestNaiveFileWALManager.java  |   32 +-
+ .../flume/collector/TestCollectorSink.java         |   14 +-
+ .../flume/handlers/avro/TestAvroSinks.java         |    4 +-
+ .../flume/handlers/rolling/TestRollRollTags.java   |   11 +-
+ .../flume/handlers/thrift/TestThriftSinks.java     |    4 +-
+ .../java/com/cloudera/util/FlumeTestHarness.java   |  112 ++++++++
+ flume-docs/src/docs/UserGuide/Glossary             |    1 -
+ flume-microbenchmarks/pom.xml                      |   57 ++++
+ .../java/com/cloudera/flume/ExamplePerfData.java   |   30 --
+ .../com/cloudera/flume/FlumeBenchmarkHarness.java  |  191 +++++++++++++
+ .../java/com/cloudera/flume/PerfAvroSinks.java     |  296 ++++++++++++++++++++
+ .../test/java/com/cloudera/flume/PerfDiskIO.java   |   27 +--
+ .../com/cloudera/flume/PerfGrepReportSinks.java    |   76 -----
+ .../test/java/com/cloudera/flume/PerfHdfsIO.java   |   17 +-
+ .../java/com/cloudera/flume/PerfReportSinks.java   |   74 +-----
+ .../test/java/com/cloudera/flume/PerfSamplers.java |   22 +--
+ .../java/com/cloudera/flume/PerfSyslogFormats.java |   86 ------
+ .../java/com/cloudera/flume/PerfThriftSinks.java   |  146 ++++++++---
+ .../java/com/cloudera/flume/TestSynthSources.java  |  145 ++++++++++
+ .../cloudera/flume/agent/BenchmarkAgentDecos.java  |   56 +++--
+ .../cloudera/flume/agent/BenchmarkBasicDecos.java  |   11 +-
+ pom.xml                                            |   13 +
+ 36 files changed, 1208 insertions(+), 474 deletions(-)
+ create mode 100644 flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
+ create mode 100644 flume-core/src/test/java/com/cloudera/util/FlumeTestHarness.java
+ create mode 100644 flume-microbenchmarks/pom.xml
+ delete mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/FlumeBenchmarkHarness.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfAvroSinks.java
+ delete mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
+ delete mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/TestSynthSources.java
+
+diff --git a/DEVNOTES b/DEVNOTES
+index 4bb8f15..51018d8 100644
+--- a/DEVNOTES
++++ b/DEVNOTES
+@@ -26,6 +26,7 @@ we describe the contents of different directories.
+ ./flume-distribution	Flume distribution package module
+ ./flume-docs		Flume documentation generation module
+ ./flume-log4j-appender  Flume log4j-avro appender module
++./flume-microbenchmarks Flume performance microbenchmark test suite
+ ./flume-node-web	Flume node status servlet module
+ ./flume-windows-dist	Flume node Windows distribution package module
+ ./plugins/              Flume plugin modules (hello world skeleton and hbase)
+@@ -177,6 +178,39 @@ This directory is setup exactly as the tarball installation of Flume
+ would be.
+ 
+ 
++=== Running Performance Microbenchmarks.
++
++The suite of source and sink microbenchmark tests (located in
++./flume-microbenchmarks/javaperf) can be run by using `mvn test -Pperf`.
++
++Just like with the normal test cases, you can use the
++`-Dtest=<TestClass>`.  So you can do:
++
++----
++mvn test -Pperf -Dtest=PerfThriftSinks
++----
++
++The logs should output lines that are formatted similarly to these
++lines:
++
++----
++[junit] nullsink,ubuntu,begin,10998597,552872,disk_loaded,2895851957,301662152,receiver_started,156786445,305698624,sink_started,105303802,305704456,thrift sink to thrift source done,39520160510,320377056,MB/s,4.579940971898899,23094932,320379168
++    [junit] [                 0us,            547,544 b mem]    Starting (after gc)
++    [junit] [        10,998,597ns d         10,998,597ns            552,872 b mem]      begin
++    [junit] [     2,914,443,637ns d      2,895,851,957ns        301,662,152 b mem]      disk_loaded
++    [junit] [     3,514,297,391ns d        156,786,445ns        305,698,624 b mem]      receiver_started
++    [junit] [     4,082,661,503ns d        105,303,802ns        305,704,456 b mem]      sink_started
++    [junit] [    44,235,264,972ns d     39,520,160,510ns        320,377,056 b mem]      thrift sink to thrift source done
++    [junit] [    44,878,445,315ns d         23,094,932ns        320,379,168 b mem]      MB/s,4.579940971898899
++----
++
++The first line is a summary of all the information in cvs format.  The
++other lines are in a tabular, more human-readable form.  The left
++column is cumulative time in ns and the middle is delta from previous
++in ns.  The last column of numbers the amount of memory in heap,
++followed but some comments or labels.
++
++
+ === Building on Windows platforms
+ 
+ Building Flume in Windows is possible.  One can generate packages and
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index b17cc44..6b5bce7 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -153,8 +153,23 @@
+             </goals>
+           </execution>
+         </executions>
++
++
+       </plugin>
+ 
++     <plugin>
++       <groupId>org.apache.maven.plugins</groupId>
++       <artifactId>maven-jar-plugin</artifactId>
++       <version>2.2</version>
++       <executions>
++         <execution>
++           <goals>
++             <goal>test-jar</goal>
++           </goals>
++         </execution>
++       </executions>
++     </plugin>
++
+     </plugins>
+   </build>
+ 
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+index 7d260f8..0977e91 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+@@ -19,10 +19,11 @@ package com.cloudera.flume.handlers.avro;
+ 
+ import java.io.IOException;
+ import java.net.URL;
+-import java.util.concurrent.atomic.AtomicLong;
+ 
+ import org.apache.avro.AvroRemoteException;
++import org.apache.avro.ipc.AccountingTransceiver;
+ import org.apache.avro.ipc.HttpTransceiver;
++import org.apache.avro.ipc.Transceiver;
+ import org.apache.avro.ipc.specific.SpecificRequestor;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -35,7 +36,7 @@ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.reporter.ReportEvent;
+ 
+ /**
+- *This is a sink that sends events to a remote host/port using Avro.
++ * This is a sink that sends events to a remote host/port using Avro.
+  */
+ public class AvroEventSink extends EventSink.Base {
+ 
+@@ -48,15 +49,7 @@ public class AvroEventSink extends EventSink.Base {
+   protected FlumeEventAvroServer avroClient;
+   String host;
+   int port;
+-  HttpTransceiver transport;
+-
+-  // this boolean variable is not used anywhere
+-  boolean nonblocking;
+-  /*
+-   * The following variables keeps track of the number of bytes of the
+-   * Event.body shipped.
+-   */
+-  AtomicLong sentBytes = new AtomicLong();
++  AccountingTransceiver transport;
+ 
+   public AvroEventSink(String host, int port) {
+     this.host = host;
+@@ -74,7 +67,6 @@ public class AvroEventSink extends EventSink.Base {
+     this.ensureInitialized();
+     try {
+       avroClient.append(afe);
+-      sentBytes.addAndGet(e.getBody().length);
+       super.append(e);
+     } catch (AvroRemoteException e1) {
+       throw new IOException("Append failed " + e1.getMessage(), e1);
+@@ -94,7 +86,8 @@ public class AvroEventSink extends EventSink.Base {
+   public void open() throws IOException {
+ 
+     URL url = new URL("http", host, port, "/");
+-    transport = new HttpTransceiver(url);
++    Transceiver http = new HttpTransceiver(url);
++    transport = new AccountingTransceiver(http);
+     try {
+       this.avroClient = (FlumeEventAvroServer) SpecificRequestor.getClient(
+           FlumeEventAvroServer.class, transport);
+@@ -119,6 +112,10 @@ public class AvroEventSink extends EventSink.Base {
+     }
+   }
+ 
++  public long getSentBytes() {
++    return transport.getSentBytes();
++  }
++
+   /**
+    * {@inheritDoc}
+    */
+@@ -127,7 +124,7 @@ public class AvroEventSink extends EventSink.Base {
+     ReportEvent rpt = super.getMetrics();
+     rpt.setStringMetric(A_SERVERHOST, host);
+     rpt.setLongMetric(A_SERVERPORT, port);
+-    rpt.setLongMetric(A_SENTBYTES, sentBytes.get());
++    rpt.setLongMetric(A_SENTBYTES, transport.getSentBytes());
+     return rpt;
+   }
+ 
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+index 8601e35..ffb490a 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+@@ -116,6 +116,10 @@ public class ThriftEventSink extends EventSink.Base {
+     }
+   }
+ 
++  public long getSentBytes() {
++    return sentBytes.get();
++  }
++
+   @Override
+   public ReportEvent getMetrics() {
+     ReportEvent rpt = super.getMetrics();
+diff --git a/flume-core/src/main/java/com/cloudera/util/Benchmark.java b/flume-core/src/main/java/com/cloudera/util/Benchmark.java
+index de0e290..8921c01 100644
+--- a/flume-core/src/main/java/com/cloudera/util/Benchmark.java
++++ b/flume-core/src/main/java/com/cloudera/util/Benchmark.java
+@@ -40,6 +40,7 @@ import com.google.common.base.Preconditions;
+ public class Benchmark {
+   long start;
+   long last;
++  long lastDelta;
+   PrintWriter out;
+   PrintWriter log;
+   List<String> values = new ArrayList<String>();
+@@ -125,6 +126,7 @@ public class Benchmark {
+ 
+     // skip over gc time
+     last = System.nanoTime(); // don't count gc time.
++    lastDelta = delta;
+   }
+ 
+   /**
+@@ -143,6 +145,10 @@ public class Benchmark {
+     return log;
+   }
+ 
++  public long getLastDelta() {
++    return lastDelta;
++  }
++
+   /**
+    * In case I want to print the csv report summary
+    * 
+diff --git a/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java b/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
+new file mode 100644
+index 0000000..357c9e4
+--- /dev/null
++++ b/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
+@@ -0,0 +1,79 @@
++package org.apache.avro.ipc;
++
++import java.io.IOException;
++import java.nio.ByteBuffer;
++import java.util.List;
++import java.util.concurrent.atomic.AtomicLong;
++
++import org.apache.avro.Protocol;
++import org.apache.avro.ipc.Transceiver;
++
++public class AccountingTransceiver extends Transceiver {
++  Transceiver xcvr;
++
++  AtomicLong bytesWritten = new AtomicLong();
++
++  public AccountingTransceiver(Transceiver xcvr) {
++    this.xcvr = xcvr;
++  }
++
++  @Override
++  public String getRemoteName() {
++    return xcvr.getRemoteName();
++  }
++
++  // Transceive is explicitly excluded because it calls readBuffers and
++  // writeBuffers virtual funcs.
++
++  @Override
++  public List<ByteBuffer> readBuffers() throws IOException {
++    return xcvr.readBuffers();
++  }
++
++  @Override
++  public void writeBuffers(List<ByteBuffer> arg0) throws IOException {
++    long len = getLength(arg0); // must be done before writing them.
++    xcvr.writeBuffers(arg0);
++    bytesWritten.addAndGet(len);
++  }
++
++  @Override
++  public boolean isConnected() {
++    return xcvr.isConnected();
++  }
++
++  @Override
++  public void setRemote(Protocol protocol) {
++    xcvr.setRemote(protocol);
++  }
++
++  @Override
++  public Protocol getRemote() {
++    return xcvr.getRemote();
++  }
++
++  @Override
++  public void close() throws IOException {
++    xcvr.close();
++  }
++
++  public long getSentBytes() {
++    return bytesWritten.get();
++  }
++
++  static int getLength(List<ByteBuffer> buffers) {
++    int length = 0;
++    for (ByteBuffer buffer : buffers) {
++      length += 4;
++      length += buffer.remaining();
++    }
++    length += 4;
++    return length;
++  }
++
++  static long bufferLens(List<ByteBuffer> buffers) throws IOException {
++    long len = getLength(buffers);
++    return len + 4;
++  }
++
++}
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestConcurrentDFOMan.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestConcurrentDFOMan.java
+index 47125f6..3b01c52 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestConcurrentDFOMan.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestConcurrentDFOMan.java
+@@ -50,7 +50,7 @@ import com.cloudera.flume.reporter.ReportManager;
+ import com.cloudera.flume.reporter.Reportable;
+ import com.cloudera.flume.reporter.aggregator.AccumulatorSink;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.FileUtil;
+ 
+ /**
+@@ -208,7 +208,7 @@ public class TestConcurrentDFOMan {
+   public void doTestLogicalNodesConcurrentDFOMans(final int threads,
+       final int events, int timeout) throws IOException, InterruptedException,
+       FlumeSpecException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     FlumeMaster master = new FlumeMaster();
+     FlumeNode node = new FlumeNode(new DirectMasterRPC(master), false, false);
+     final Reportable[] dfos = new Reportable[threads];
+@@ -248,7 +248,7 @@ public class TestConcurrentDFOMan {
+     }
+     assertTrue("Counts did not line up", success);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBehavior.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBehavior.java
+index 46add14..831eca3 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBehavior.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBehavior.java
+@@ -42,7 +42,7 @@ import com.cloudera.flume.core.Driver.DriverState;
+ import com.cloudera.flume.reporter.ReportEvent;
+ import com.cloudera.flume.reporter.ReportManager;
+ import com.cloudera.flume.reporter.aggregator.AccumulatorSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.Clock;
+ 
+ /**
+@@ -59,12 +59,12 @@ public class TestDiskFailoverBehavior {
+ 
+   @Before
+   public void setup() {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+   }
+ 
+   @After
+   public void teardown() throws IOException {
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   LogicalNode setupAgent(long count, String agentSink) throws IOException,
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBenchmarking.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBenchmarking.java
+index d9c932e..d8ee64e 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBenchmarking.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverBenchmarking.java
+@@ -32,7 +32,7 @@ import com.cloudera.flume.core.EventUtil;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.reporter.ReportManager;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ 
+ /**
+  * This check to make sure basic benchmarking should work -- ie when closed all
+@@ -43,7 +43,7 @@ public class TestDiskFailoverBenchmarking {
+   @Test
+   public void benchmarkBeforeFailover() throws FlumeSpecException, IOException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     // String spec =
+     // "{ benchinject => { benchreport(\"pre\") =>  { diskFailover => [console, counter(\"beforecount\")] } } }";
+     String spec = "{ benchinject => { benchreport(\"pre\") =>  { diskFailover => counter(\"beforecount\") } } }";
+@@ -60,14 +60,14 @@ public class TestDiskFailoverBenchmarking {
+     CounterSink cnt = (CounterSink) ReportManager.get().getReportable(
+         "beforecount");
+     Assert.assertEquals(5, cnt.getCount());
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+ 
+   }
+ 
+   @Test
+   public void benchmarkAfterFailover() throws FlumeSpecException, IOException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     String spec = "{ benchinject => { diskFailover => { benchreport(\"post\") =>  counter(\"beforecount\") } } }";
+     EventSink snk = FlumeBuilder.buildSink(new ReportTestingContext(
+         LogicalNodeContext.testingContext()), spec);
+@@ -82,13 +82,13 @@ public class TestDiskFailoverBenchmarking {
+     CounterSink cnt = (CounterSink) ReportManager.get().getReportable(
+         "beforecount");
+     Assert.assertEquals(5, cnt.getCount());
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   @Test
+   public void benchmarkBeforeWriteahead() throws FlumeSpecException,
+       IOException, InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     String spec = "{ benchinject => { benchreport(\"pre\") =>  { diskFailover => counter(\"beforecount\") } } }";
+     EventSink snk = FlumeBuilder.buildSink(new ReportTestingContext(
+         LogicalNodeContext.testingContext()), spec);
+@@ -103,13 +103,13 @@ public class TestDiskFailoverBenchmarking {
+     CounterSink cnt = (CounterSink) ReportManager.get().getReportable(
+         "beforecount");
+     Assert.assertEquals(5, cnt.getCount());
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   @Test
+   public void benchmarkAfterWriteahead() throws FlumeSpecException,
+       IOException, InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+ 
+     String spec = "{ benchinject => { ackedWriteAhead => { benchreport(\"post\") =>  counter(\"beforecount\") } } }";
+     EventSink snk = FlumeBuilder.buildSink(new ReportTestingContext(
+@@ -127,7 +127,7 @@ public class TestDiskFailoverBenchmarking {
+ 
+     // +2 because of wal ack begin and end messages.
+     Assert.assertEquals(5 + 2, cnt.getCount());
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+ 
+   }
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
+index be6d9b9..a7e2d78 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
+@@ -40,17 +40,17 @@ import com.cloudera.flume.core.EventUtil;
+ import com.cloudera.flume.handlers.rolling.ProcessTagger;
+ import com.cloudera.flume.handlers.rolling.TimeTrigger;
+ import com.cloudera.flume.reporter.ReportEvent;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ 
+ public class TestDiskFailoverDeco {
+   @Before
+   public void setup() {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+   }
+ 
+   @After
+   public void cleanup() {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+ 
+   }
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverManager.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverManager.java
+index ea5a7ce..7d28d33 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverManager.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverManager.java
+@@ -35,7 +35,7 @@ import com.cloudera.flume.core.EventSource;
+ import com.cloudera.flume.handlers.debug.ConsoleEventSink;
+ import com.cloudera.flume.handlers.rolling.ProcessTagger;
+ import com.cloudera.flume.handlers.rolling.Tagger;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.FileUtil;
+ 
+ /**
+@@ -134,8 +134,8 @@ public class TestDiskFailoverManager {
+    */
+   @Test
+   public void testRecovers() throws IOException, FlumeSpecException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     // putting in large ridiculous constant
+     NaiveFileFailoverManager dfo = new NaiveFileFailoverManager(tmp);
+@@ -169,7 +169,7 @@ public class TestDiskFailoverManager {
+     assertEquals(0,
+         new File(tmp, NaiveFileFailoverManager.WRITINGDIR).list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestConcurrentWALMan.java b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestConcurrentWALMan.java
+index 28bbe73..5de0181 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestConcurrentWALMan.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestConcurrentWALMan.java
+@@ -51,7 +51,7 @@ import com.cloudera.flume.master.FlumeMaster;
+ import com.cloudera.flume.master.StatusManager.NodeState;
+ import com.cloudera.flume.reporter.ReportManager;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.Clock;
+ import com.cloudera.util.FileUtil;
+ 
+@@ -189,7 +189,7 @@ public class TestConcurrentWALMan {
+   public void doTestContextConcurrentWALMans(final int threads,
+       final int events, int timeout) throws IOException, InterruptedException,
+       FlumeSpecException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     FlumeMaster master = new FlumeMaster();
+     FlumeNode node = new FlumeNode(new DirectMasterRPC(master), false, false);
+ 
+@@ -217,7 +217,7 @@ public class TestConcurrentWALMan {
+       assertEquals(events + i, cnt.getCount());
+     }
+     assertTrue("Counts did not line up", success);
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALDeco.java b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALDeco.java
+index 183bb03..8dd45fa 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALDeco.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALDeco.java
+@@ -51,7 +51,7 @@ import com.cloudera.flume.handlers.rolling.SizeTrigger;
+ import com.cloudera.flume.handlers.rolling.TimeTrigger;
+ import com.cloudera.flume.reporter.ReportManager;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.FileUtil;
+ 
+ /**
+@@ -74,8 +74,8 @@ public class TestNaiveFileWALDeco {
+   public void testRecoveredIsDeleted() throws IOException, FlumeSpecException,
+       InterruptedException {
+ 
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     // file with ack begin, data, and end messages
+     File acked = new File(getClass().getClassLoader()
+@@ -83,7 +83,7 @@ public class TestNaiveFileWALDeco {
+         .getFile());
+     // Assumes the NaiveFileWALManager!
+     File writing = new File(new File(tmp,
+-        BenchmarkHarness.node.getPhysicalNodeName()), "writing");
++        FlumeTestHarness.node.getPhysicalNodeName()), "writing");
+     writing.mkdirs();
+ 
+     // Must rename file because that name is in the meta data of the event
+@@ -105,7 +105,7 @@ public class TestNaiveFileWALDeco {
+     snk.close(); // this should block until recovery complete.
+ 
+     // agent checks for ack registrations.
+-    BenchmarkHarness.node.getAckChecker().checkAcks();
++    FlumeTestHarness.node.getAckChecker().checkAcks();
+ 
+     CounterSink cnt = (CounterSink) ReportManager.get().getReportable("count");
+     // 1032 in file + 5 from silly driver
+@@ -120,7 +120,7 @@ public class TestNaiveFileWALDeco {
+     assertFalse(new File(new File(tmp, "error"), acked.getName()).exists());
+     assertFalse(new File(new File(tmp, "done"), acked.getName()).exists());
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -133,8 +133,8 @@ public class TestNaiveFileWALDeco {
+       FlumeSpecException, InterruptedException {
+     // FlumeConfiguration.get().setLong(FlumeConfiguration.AGENT_LOG_MAX_AGE,
+     // 50);
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     // file with ack begin, data, and end messages
+     File acked = new File(getClass().getClassLoader()
+@@ -142,7 +142,7 @@ public class TestNaiveFileWALDeco {
+         .getFile());
+     // Assumes the NaiveFileWALManager!
+     File writing = new File(new File(tmp,
+-        BenchmarkHarness.node.getPhysicalNodeName()), "writing");
++        FlumeTestHarness.node.getPhysicalNodeName()), "writing");
+     writing.mkdirs();
+ 
+     // /////////////////////
+@@ -161,7 +161,7 @@ public class TestNaiveFileWALDeco {
+     snk.close(); // this should block until recovery complete.
+ 
+     // agent checks for ack registrations.
+-    BenchmarkHarness.node.getAckChecker().checkAcks();
++    FlumeTestHarness.node.getAckChecker().checkAcks();
+ 
+     CounterSink cnt = (CounterSink) ReportManager.get().getReportable("count");
+     // 1032 in file + 5 from silly driverx
+@@ -179,10 +179,10 @@ public class TestNaiveFileWALDeco {
+     // locally is reasonable for now.
+ 
+     assertTrue(new File(new File(new File(tmp,
+-        BenchmarkHarness.node.getPhysicalNodeName()), "sent"), acked.getName())
++        FlumeTestHarness.node.getPhysicalNodeName()), "sent"), acked.getName())
+         .exists());
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -197,8 +197,8 @@ public class TestNaiveFileWALDeco {
+   @Test
+   public void testRecoveredMovesToErr() throws IOException, FlumeSpecException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     // Assumes the NaiveFileWALManager!
+     // file with ack begin, data and then truncated
+@@ -206,7 +206,7 @@ public class TestNaiveFileWALDeco {
+         .getResource("data/truncated.00000000.20100204-015814430-0800.seq")
+         .getFile());
+     File writing = new File(new File(tmp,
+-        BenchmarkHarness.node.getPhysicalNodeName()), "writing");
++        FlumeTestHarness.node.getPhysicalNodeName()), "writing");
+ 
+     writing.mkdirs();
+     FileUtil.dumbfilecopy(truncated, new File(writing, truncated.getName()));
+@@ -230,7 +230,7 @@ public class TestNaiveFileWALDeco {
+     // BenchmarkHarness.mock.ackman.;
+ 
+     // check to make sure wal file is gone
+-    File nodedir = new File(tmp, BenchmarkHarness.node.getPhysicalNodeName());
++    File nodedir = new File(tmp, FlumeTestHarness.node.getPhysicalNodeName());
+ 
+     assertFalse(new File(new File(nodedir, "import"), truncated.getName())
+         .exists());
+@@ -251,7 +251,7 @@ public class TestNaiveFileWALDeco {
+     assertFalse(new File(new File(nodedir, "done"), truncated.getName())
+         .exists());
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -322,7 +322,7 @@ public class TestNaiveFileWALDeco {
+   public void testExceptionThreadHandoff() throws IOException,
+       InterruptedException {
+     try {
+-      BenchmarkHarness.setupLocalWriteDir();
++      FlumeTestHarness.setupLocalWriteDir();
+       Event e = new EventImpl(new byte[0]);
+       EventSink snk = new EventSink.Base() {
+         @Override
+@@ -343,7 +343,7 @@ public class TestNaiveFileWALDeco {
+     } catch (IOException e) {
+       throw e;
+     } finally {
+-      BenchmarkHarness.cleanupLocalWriteDir();
++      FlumeTestHarness.cleanupLocalWriteDir();
+     }
+   }
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALHandles.java b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALHandles.java
+index 83fe7da..b5fc0be 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALHandles.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALHandles.java
+@@ -28,7 +28,7 @@ import com.cloudera.flume.core.Event;
+ import com.cloudera.flume.core.EventImpl;
+ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ 
+ /**
+  * Test for file handle exhaustion problems with WAL and DFO
+@@ -45,8 +45,8 @@ public class TestNaiveFileWALHandles {
+    */
+   @Test
+   public void testSeqfileEventSinkHandleExhaust() throws IOException, InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     for (int i = 0; i < 3000; i++) {
+       File path = new File(tmp, "" + i);
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALManager.java b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALManager.java
+index 2b4e269..ce42c37 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALManager.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/durability/TestNaiveFileWALManager.java
+@@ -38,7 +38,7 @@ import com.cloudera.flume.handlers.endtoend.AckChecksumInjector;
+ import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+ import com.cloudera.flume.handlers.rolling.ProcessTagger;
+ import com.cloudera.flume.handlers.rolling.Tagger;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.FileUtil;
+ 
+ public class TestNaiveFileWALManager {
+@@ -137,8 +137,8 @@ public class TestNaiveFileWALManager {
+    */
+   @Test
+   public void testRecovers() throws IOException, FlumeSpecException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     // putting in large ridiculous constant
+     NaiveFileWALManager wal = new NaiveFileWALManager(tmp);
+@@ -173,7 +173,7 @@ public class TestNaiveFileWALManager {
+     // logged, writing, sending, sent
+     assertEquals(4, new File(tmp, "logged").list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -183,8 +183,8 @@ public class TestNaiveFileWALManager {
+   @Test
+   public void testReframeRecovers() throws IOException, FlumeSpecException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     NaiveFileWALManager wal = new NaiveFileWALManager(tmp);
+     wal.open(); // create dirs
+@@ -213,7 +213,7 @@ public class TestNaiveFileWALManager {
+     assertEquals(1, new File(tmp, "error").list().length);
+     assertEquals(1, new File(tmp, "logged").list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -222,8 +222,8 @@ public class TestNaiveFileWALManager {
+   @Test
+   public void testReframeMultipleOpenAcks() throws IOException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     NaiveFileWALManager wal = new NaiveFileWALManager(tmp);
+     wal.open(); // create dirs
+@@ -255,7 +255,7 @@ public class TestNaiveFileWALManager {
+     assertEquals(1, new File(tmp, "error").list().length);
+     assertEquals(1, new File(tmp, "logged").list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+ 
+   }
+ 
+@@ -264,8 +264,8 @@ public class TestNaiveFileWALManager {
+    */
+   @Test
+   public void testReframeUnframed() throws IOException, InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     NaiveFileWALManager wal = new NaiveFileWALManager(tmp);
+     wal.open(); // create dirs
+@@ -290,7 +290,7 @@ public class TestNaiveFileWALManager {
+     assertEquals(1, new File(tmp, "error").list().length);
+     assertEquals(1, new File(tmp, "logged").list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+ 
+   }
+ 
+@@ -300,8 +300,8 @@ public class TestNaiveFileWALManager {
+   @Test
+   public void testReframeBadAckChecksum() throws IOException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
+-    File tmp = BenchmarkHarness.tmpdir;
++    FlumeTestHarness.setupLocalWriteDir();
++    File tmp = FlumeTestHarness.tmpdir;
+ 
+     NaiveFileWALManager wal = new NaiveFileWALManager(tmp);
+     wal.open(); // create dirs
+@@ -335,7 +335,7 @@ public class TestNaiveFileWALManager {
+     assertEquals(1, new File(tmp, "error").list().length);
+     assertEquals(1, new File(tmp, "logged").list().length);
+ 
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+ 
+   }
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+index 232db0e..f46b8c3 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+@@ -73,7 +73,7 @@ import com.cloudera.flume.handlers.thrift.Priority;
+ import com.cloudera.flume.handlers.thrift.ThriftFlumeEvent;
+ import com.cloudera.flume.reporter.ReportEvent;
+ import com.cloudera.flume.reporter.ReportManager;
+-import com.cloudera.util.BenchmarkHarness;
++import com.cloudera.util.FlumeTestHarness;
+ import com.cloudera.util.Clock;
+ import com.cloudera.util.FileUtil;
+ import com.cloudera.util.Pair;
+@@ -270,7 +270,7 @@ public class TestCollectorSink {
+     // entries). This stubs that out to a call doesn't cause a file not found
+     // exception.
+     WALManager mockWalMan = mock(WALManager.class);
+-    BenchmarkHarness.setupFlumeNode(null, mockWalMan, null, null, null);
++    FlumeTestHarness.setupFlumeNode(null, mockWalMan, null, null, null);
+     FlumeNode node = FlumeNode.getInstance();
+     File tmpdir = FileUtil.mktempdir();
+ 
+@@ -321,7 +321,7 @@ public class TestCollectorSink {
+     snk.close();
+ 
+     FileUtil.rmr(tmpdir);
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -338,7 +338,7 @@ public class TestCollectorSink {
+     // entries). This stubs that out to a call doesn't cause a file not found
+     // exception.
+     WALManager mockWalMan = mock(WALManager.class);
+-    BenchmarkHarness.setupFlumeNode(null, mockWalMan, null, null, null);
++    FlumeTestHarness.setupFlumeNode(null, mockWalMan, null, null, null);
+     FlumeNode node = FlumeNode.getInstance();
+     File tmpdir = FileUtil.mktempdir();
+ 
+@@ -385,7 +385,7 @@ public class TestCollectorSink {
+     snk.close();
+ 
+     FileUtil.rmr(tmpdir);
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+@@ -399,7 +399,7 @@ public class TestCollectorSink {
+     // entries). This stubs that out to a call doesn't cause a file not found
+     // exception.
+     WALManager mockWalMan = mock(WALManager.class);
+-    BenchmarkHarness.setupFlumeNode(null, mockWalMan, null, null, null);
++    FlumeTestHarness.setupFlumeNode(null, mockWalMan, null, null, null);
+     FlumeNode node = FlumeNode.getInstance();
+     File tmpdir = FileUtil.mktempdir();
+ 
+@@ -446,7 +446,7 @@ public class TestCollectorSink {
+     snk.close();
+ 
+     FileUtil.rmr(tmpdir);
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   /**
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+index 08c8bb4..1de67df 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+@@ -193,8 +193,8 @@ public class TestAvroSinks implements ExampleData {
+             mem.close();
+             snk.close();
+ 
+-            sendByteSum.addAndGet(snk.sentBytes.get());
+-            LOG.info("sink " + id + " sent " + snk.sentBytes + " bytes");
++            sendByteSum.addAndGet(snk.getSentBytes());
++            LOG.info("sink " + id + " sent " + snk.getSentBytes() + " bytes");
+             sendDone.countDown();
+ 
+           } catch (IOException e) {
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollRollTags.java b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollRollTags.java
+index 0093020..01d6574 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollRollTags.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollRollTags.java
+@@ -36,8 +36,8 @@ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.core.MaskDecorator;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.handlers.endtoend.ValueDecorator;
+-import com.cloudera.util.BenchmarkHarness;
+ import com.cloudera.util.FileUtil;
++import com.cloudera.util.FlumeTestHarness;
+ 
+ /**
+  * This test case demonstrates a usecase where a tag conflict occurs.
+@@ -110,7 +110,8 @@ public class TestRollRollTags {
+   // should no longer.
+   @Test
+   public void testAgentCollector() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++
++    FlumeTestHarness.setupLocalWriteDir();
+     File path = FileUtil.createTempFile("collector", ".tmp");
+     path.deleteOnExit();
+ 
+@@ -121,13 +122,13 @@ public class TestRollRollTags {
+     snk.open();
+     snk.append(e); // should not bork.
+     snk.close();
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ 
+   @Test
+   public void testAgentCollectorFixed() throws FlumeSpecException, IOException,
+       InterruptedException {
+-    BenchmarkHarness.setupLocalWriteDir();
++    FlumeTestHarness.setupLocalWriteDir();
+     File path = FileUtil.createTempFile("collector", ".tmp");
+     path.deleteOnExit();
+ 
+@@ -139,6 +140,6 @@ public class TestRollRollTags {
+     snk.open();
+     snk.append(e); // should not bork.
+     snk.close();
+-    BenchmarkHarness.cleanupLocalWriteDir();
++    FlumeTestHarness.cleanupLocalWriteDir();
+   }
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
+index 9bf4a4b..d630d33 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
+@@ -214,8 +214,8 @@ public class TestThriftSinks implements ExampleData {
+             mem.close();
+             snk.close();
+ 
+-            sendByteSum.addAndGet(snk.sentBytes.get());
+-            LOG.info("sink " + id + " sent " + snk.sentBytes + " bytes");
++            sendByteSum.addAndGet(snk.getSentBytes());
++            LOG.info("sink " + id + " sent " + snk.getSentBytes() + " bytes");
+             sendDone.countDown();
+ 
+           } catch (IOException e) {
+diff --git a/flume-core/src/test/java/com/cloudera/util/FlumeTestHarness.java b/flume-core/src/test/java/com/cloudera/util/FlumeTestHarness.java
+new file mode 100644
+index 0000000..568ac03
+--- /dev/null
++++ b/flume-core/src/test/java/com/cloudera/util/FlumeTestHarness.java
+@@ -0,0 +1,112 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.util;
++
++import java.io.File;
++import java.io.IOException;
++
++import org.junit.Assert;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.cloudera.flume.agent.FlumeNode;
++import com.cloudera.flume.agent.LivenessManager;
++import com.cloudera.flume.agent.LogicalNodeManager;
++import com.cloudera.flume.agent.MockMasterRPC;
++import com.cloudera.flume.agent.diskfailover.DiskFailoverManager;
++import com.cloudera.flume.agent.diskfailover.NaiveFileFailoverManager;
++import com.cloudera.flume.agent.durability.NaiveFileWALManager;
++import com.cloudera.flume.agent.durability.WALManager;
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.handlers.endtoend.CollectorAckListener;
++import com.cloudera.flume.reporter.ReportManager;
++
++/**
++ * This sets up a batttery of synthetic datasets for testing against different
++ * decorators and sinks. Generally, each test requires ~2GB mem. ~1GB for
++ * keeping a data set in memory and the other GB for some gc headroom.
++ */
++public class FlumeTestHarness {
++  static final Logger LOG = LoggerFactory.getLogger(FlumeTestHarness.class);
++
++  // These are setup to point to new default logging dir for each test.
++  public static FlumeNode node;
++  public static MockMasterRPC mock;
++  public static File tmpdir;
++
++  /**
++   * This sets the log dir in the FlumeConfiguration and then instantiates a
++   * mock master and node that use that configuration
++   */
++  public static void setupLocalWriteDir() {
++    try {
++      tmpdir = FileUtil.mktempdir();
++    } catch (Exception e) {
++      Assert.fail("mk temp dir failed");
++    }
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    conf.clear(); // reset all back to defaults.
++    conf.set(FlumeConfiguration.AGENT_LOG_DIR_NEW, tmpdir.getAbsolutePath());
++
++    mock = new MockMasterRPC();
++    node = new FlumeNode(mock, false /* starthttp */, false /* oneshot */);
++    ReportManager.get().clear();
++  }
++
++  /**
++   * This version allows a particular test case to replace the default
++   * xxxManager with one that is reasonable for the test.
++   * 
++   * Any args that are null will default to the "normal" version.
++   */
++  public static void setupFlumeNode(LogicalNodeManager nodesMan,
++      WALManager walMan, DiskFailoverManager dfMan,
++      CollectorAckListener colAck, LivenessManager liveman) {
++    try {
++      tmpdir = FileUtil.mktempdir();
++    } catch (Exception e) {
++      Assert.fail("mk temp dir failed");
++    }
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    conf.set(FlumeConfiguration.AGENT_LOG_DIR_NEW, tmpdir.getAbsolutePath());
++
++    mock = new MockMasterRPC();
++
++    nodesMan = (nodesMan != null) ? nodesMan : new LogicalNodeManager(NetUtils
++        .localhost());
++    walMan = (walMan != null) ? walMan : new NaiveFileWALManager(new File(conf
++        .getAgentLogsDir()));
++    dfMan = (dfMan != null) ? dfMan : new NaiveFileFailoverManager(new File(
++        conf.getAgentLogsDir()));
++    colAck = (colAck != null) ? colAck : new CollectorAckListener(mock);
++    liveman = (liveman != null) ? liveman : new LivenessManager(nodesMan, mock,
++        walMan);
++
++    node = new FlumeNode(NetUtils.localhost(), mock, nodesMan, walMan, dfMan,
++        colAck, liveman);
++  }
++
++  /**
++   * Cleanup the temp dir after the test is run.
++   */
++  public static void cleanupLocalWriteDir() throws IOException {
++    FileUtil.rmr(tmpdir);
++  }
++
++
++}
+diff --git a/flume-docs/src/docs/UserGuide/Glossary b/flume-docs/src/docs/UserGuide/Glossary
+index 44ef96d..9d90bba 100644
+--- a/flume-docs/src/docs/UserGuide/Glossary
++++ b/flume-docs/src/docs/UserGuide/Glossary
+@@ -41,4 +41,3 @@ The place where a node sends its data after all processing is done.
+ 
+ Source::
+ The place where a node gets its data stream.
+-
+diff --git a/flume-microbenchmarks/pom.xml b/flume-microbenchmarks/pom.xml
+new file mode 100644
+index 0000000..aaa9af6
+--- /dev/null
++++ b/flume-microbenchmarks/pom.xml
+@@ -0,0 +1,57 @@
++<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
++
++  <modelVersion>4.0.0</modelVersion>
++
++  <parent>
++    <artifactId>flume</artifactId>
++    <groupId>com.cloudera</groupId>
++    <version>0.9.5-SNAPSHOT</version>
++  </parent>
++
++  <name>Flume Microbenchmark tests</name>
++  <artifactId>flume-microbenchmarks</artifactId>
++
++  <build>
++    <plugins>
++     <plugin>
++       <groupId>org.apache.maven.plugins</groupId>
++       <artifactId>maven-jar-plugin</artifactId>
++       <version>2.2</version>
++       <executions>
++         <execution>
++           <goals>
++             <goal>test-jar</goal>
++           </goals>
++         </execution>
++       </executions>
++     </plugin>
++    </plugins>
++  </build>
++
++  <dependencies>
++    <dependency>
++      <groupId>${project.parent.groupId}</groupId>
++      <artifactId>flume-core</artifactId>
++      <version>${project.parent.version}</version>
++      <scope>provided</scope>
++    </dependency>
++
++    <dependency>
++      <groupId>${project.parent.groupId}</groupId>
++      <artifactId>flume-core</artifactId>
++      <version>${project.parent.version}</version>
++      <scope>provided</scope>
++      <type>test-jar</type>
++    </dependency>
++
++    <dependency>
++      <groupId>junit</groupId>
++      <artifactId>junit</artifactId>
++      <version>4.8.1</version>
++      <scope>compile</scope>
++    </dependency>
++
++  </dependencies>
++
++</project>
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
+deleted file mode 100644
+index 5fd4157..0000000
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-/**
+- * This contains pointers to files use for performance testing. These files are
+- * large (~100MB each) and are not checked into the repository.
+- */
+-public interface ExamplePerfData extends ExampleData {
+-  final static String HADOOP_DATA[] = { "src/javaperf/data/hadoop_00000",
+-  // "src/javaperf/data/hadoop_00001",
+-  // TODO (jon) this goes to 53, only 00000 is present in data dir.
+-  };
+-
+-}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/FlumeBenchmarkHarness.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/FlumeBenchmarkHarness.java
+new file mode 100644
+index 0000000..cd23411
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/FlumeBenchmarkHarness.java
+@@ -0,0 +1,191 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.IOException;
++import java.util.Date;
++import java.util.HashMap;
++import java.util.Map;
++import java.util.SortedMap;
++import java.util.TreeMap;
++
++import com.cloudera.flume.conf.Context;
++import com.cloudera.flume.conf.FlumeBuilder;
++import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.flume.core.Attributes;
++import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.core.EventSource;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.AttrSynthSource;
++import com.cloudera.flume.handlers.debug.BenchmarkReportDecorator;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NoNlASCIISynthSource;
++import com.cloudera.flume.reporter.ReportEvent;
++import com.cloudera.flume.reporter.ReportManager;
++import com.cloudera.flume.reporter.Reportable;
++import com.cloudera.util.FlumeTestHarness;
++
++public class FlumeBenchmarkHarness extends FlumeTestHarness {
++  // This is a tiny test set, suitable for step-through debugging
++  @SuppressWarnings("serial")
++  public static Map<String, EventSource> createTinyCases() {
++    return new HashMap<String, EventSource>() {
++      {
++        // datasets with fields, x attributes, 10 byte long attr names, 10
++        // byte values.
++        put("10,10,5,5,8", new AttrSynthSource(10, 5, 5, 8, 1337));
++      }
++    };
++  }
++
++  // This is a data set that varies the size of the body of an event.
++  @SuppressWarnings("serial")
++  public static Map<String, EventSource> createVariedMsgBytesCases() {
++    return new HashMap<String, EventSource>() {
++      {
++        // 1337 is the rand seed.
++
++        // this is *really* slow
++        put("100000,10,0,0,0", new NoNlASCIISynthSource(100000, 10, 1337));
++        put("100000,100,0,0,0", new NoNlASCIISynthSource(100000, 100, 1337));
++        put("100000,1000,0,0,0", new NoNlASCIISynthSource(100000, 1000, 1337));
++        put("100000,3000,0,0,0", new NoNlASCIISynthSource(100000, 3000, 1337));
++        put("100000,10000,0,0,0", new NoNlASCIISynthSource(100000, 10000, 1337));
++      }
++    };
++  }
++
++  // This dataset varies the # of attributes an event has. The latter two
++  // entries send fewer messages because the size of the messages are memory
++  // prohibitive
++  @SuppressWarnings("serial")
++  public static Map<String, EventSource> createVariedNumAttrsCases() {
++    return new HashMap<String, EventSource>() {
++      {
++        // datasets with fields, x attributes, 10 byte long attr names, 10
++        // byte values.
++        put("100000,0,10,10,10", new AttrSynthSource(100000, 10, 10, 10, 1337));
++        put("100000,0,100,10,10",
++            new AttrSynthSource(100000, 100, 10, 10, 1337));
++        put("10000,0,1000,10,10",
++            new AttrSynthSource(10000, 1000, 10, 10, 1337));
++        put("1000,0,10000,10,10",
++            new AttrSynthSource(1000, 10000, 10, 10, 1337));
++      }
++    };
++  }
++
++  // This dataset varies the size of the values associated with an attribute.
++  @SuppressWarnings("serial")
++  public static Map<String, EventSource> createVariedValSizeCases() {
++    return new HashMap<String, EventSource>() {
++      {
++        // datasets with fields, 10 attributes, 10 byte long attr names, xx
++        // byte values.
++        put("100000,0,10,10,10", new AttrSynthSource(100000, 10, 10, 10, 1337));
++        put("100000,0,10,10,100",
++            new AttrSynthSource(100000, 10, 10, 100, 1337));
++        put("100000,0,10,10,1000", new AttrSynthSource(100000, 10, 10, 1000,
++            1337));
++        put("1000,0,10,10,10000", new AttrSynthSource(10000, 10, 10, 10000,
++            1337));
++      }
++    };
++  }
++
++  /**
++   * This takes what ever data set comes in and multiplies it by 10x volume.
++   */
++  public static EventSink createDecoratorBenchmarkSink(String name, String deco)
++      throws FlumeSpecException {
++    String spec = "mult(10) benchinject " + deco + " benchreport(\"" + name
++        + "\") null";
++    return FlumeBuilder.buildSink(new Context(), spec);
++  }
++
++  public static EventSink createSinkBenchmark(String name, String sink)
++      throws FlumeSpecException {
++    String spec = "benchinject benchreport(\"" + name + "\") " + sink;
++    return FlumeBuilder.buildSink(new Context(), spec);
++  }
++
++  /**
++   * This takes a single decorator, and then applies all of the datasets through
++   * the decorator. Each source is bufferzied -- the given number of messages
++   * are stored in memory so that they can be blasted through any deco.
++   * 
++   * @throws InterruptedException
++   */
++  public static void doDecoBenchmark(String deco, Map<String, EventSource> sets)
++      throws FlumeSpecException, IOException, InterruptedException {
++    for (Map.Entry<String, EventSource> ent : sets.entrySet()) {
++      setupLocalWriteDir();
++      ReportManager.get().clear();
++
++      // copy all events into memory
++      EventSource src = MemorySinkSource.bufferize(ent.getValue());
++      EventSink snk = createDecoratorBenchmarkSink(ent.getKey() + "," + deco,
++          deco);
++      src.open();
++      snk.open();
++      EventUtil.dumpAll(src, snk);
++      src.close();
++      snk.close();
++      dumpReports();
++      cleanupLocalWriteDir();
++    }
++  }
++
++  /**
++   * This gets reports and outputs them to std err in csv format.
++   */
++  public static void dumpReports() {
++    ReportManager rman = ReportManager.get();
++    SortedMap<String, Reportable> sorted = new TreeMap<String, Reportable>(
++        rman.getReportables());
++    for (Map.Entry<String, Reportable> ent : sorted.entrySet()) {
++      String params = ent.getKey();
++      ReportEvent r = ent.getValue().getMetrics();
++      System.out.println(new String(r.toString()));
++      System.err.print(new Date(r.getTimestamp()) + ",");
++      System.err.print(params + ",");
++      System.err.print(Attributes.readString(r,
++          BenchmarkReportDecorator.A_BENCHMARK_CSV));
++    }
++  }
++
++  /**
++   * This is about 300MB in memory
++   */
++  public static MemorySinkSource synthInMem() throws IOException,
++      InterruptedException {
++    return synthInMem(1000000, 100, 1);
++  }
++
++  public static MemorySinkSource synthInMem(int count, int bodySz, int seed)
++      throws IOException, InterruptedException {
++    EventSource txt = new NoNlASCIISynthSource(count, bodySz, seed);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    return mem;
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfAvroSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfAvroSinks.java
+new file mode 100644
+index 0000000..58e1a75
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfAvroSinks.java
+@@ -0,0 +1,296 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.avro.AvroEventSink;
++import com.cloudera.flume.handlers.avro.AvroEventSource;
++import com.cloudera.flume.handlers.batch.BatchingDecorator;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NullSink;
++import com.cloudera.util.Benchmark;
++
++/**
++ * These tests are for microbenchmarking the Avro sink and server elements.
++ */
++public class PerfAvroSinks {
++
++  /**
++   * mem -> AvroEventSink -> AvroEventSource -> NullSink
++   */
++  @Test
++  public void testAvroSend() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final AvroEventSource tes = new AvroEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final AvroEventSink snk = new AvroEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("Avro sink to Avro source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * mem -> batch(10) AvroEventSink -> AvroEventSource -> NullSink
++   */
++  @Test
++  public void testAvroBatchSend10() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final AvroEventSource tes = new AvroEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final AvroEventSink tsnk = new AvroEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    // make size happen first all the time.
++    final BatchingDecorator snk = new BatchingDecorator(tsnk, 10, 10000000);
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("Avro sink to Avro source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) tsnk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * mem -> batch(10) AvroEventSink -> AvroEventSource -> NullSink
++   */
++  @Test
++  public void testAvroBatchSend100() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final AvroEventSource tes = new AvroEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final AvroEventSink tsnk = new AvroEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    // make size happen first all the time.
++    final BatchingDecorator snk = new BatchingDecorator(tsnk, 100, 10000000);
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("Avro sink to Avro source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) tsnk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * This is slighlty different by using another thread to kick off the sink. It
++   * shouldn't really matter much.
++   * 
++   * Pipeline is:
++   * 
++   * text -> mem
++   * 
++   * mem -> AvroEventSink -> AvroEventSource -> NullSink
++   **/
++  @Test
++  public void testAvroSendMulti() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final AvroEventSource tes = new AvroEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final AvroEventSink snk = new AvroEventSink("0.0.0.0",
++        conf.getCollectorPort());
++
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          snk.open();
++        } catch (IOException e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    t.start();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("Avro sink to Avro source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++
++    Thread.sleep(1000);
++    tes.close();
++    snk.close();
++    t.interrupt();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * Here we are using the AvroRawEventSink instead of the AvroEventSink
++   * 
++   * Pipeline is:
++   * 
++   * text -> mem
++   * 
++   * mem -> AvroRawEventSink -> AvroEventSource -> NullSink
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void testAvroRawSend() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final AvroEventSource tes = new AvroEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final AvroEventSink snk = new AvroEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("Avro sink to Avro source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
+index f52bc65..93f32e6 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
+@@ -23,9 +23,7 @@ import java.io.IOException;
+ import org.junit.Test;
+ 
+ import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.Log4jTextFileSource;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+ import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+ import com.cloudera.flume.handlers.hdfs.SeqfileEventSource;
+ import com.cloudera.util.Benchmark;
+@@ -34,19 +32,13 @@ import com.cloudera.util.Benchmark;
+  * This performance test tests the throughput of various disk reading and
+  * writing sources and sinks.
+  */
+-public class PerfDiskIO implements ExamplePerfData {
++public class PerfDiskIO {
+ 
+   @Test
+   public void testWrite() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("seqfile write");
+     b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     File tmp = File.createTempFile("test", "tmp");
+@@ -62,6 +54,7 @@ public class PerfDiskIO implements ExamplePerfData {
+     sink.close();
+     b.mark("seqfile size", tmp.length());
+     b.done();
++    mem = null; // allow mem to be freed.
+ 
+     // //////// second phase using the file written in previous phase.
+     Benchmark b2 = new Benchmark("seqfile_disk_read");
+@@ -77,18 +70,4 @@ public class PerfDiskIO implements ExamplePerfData {
+     b2.done();
+   }
+ 
+-  @Test
+-  public void testReadFormat() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("log4j format read");
+-    b.mark("begin");
+-
+-    Log4jTextFileSource txt = new Log4jTextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("log4j_disk_loaded");
+-    b.done();
+-  }
+ }
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
+deleted file mode 100644
+index cf0a754..0000000
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
++++ /dev/null
+@@ -1,76 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.File;
+-import java.io.IOException;
+-
+-import org.junit.Assert;
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.reporter.builder.MultiGrepReporterBuilder;
+-import com.cloudera.flume.reporter.histogram.MultiGrepReporterSink;
+-import com.cloudera.util.Benchmark;
+-import com.cloudera.util.Histogram;
+-
+-/**
+- * This set of performance tests isolate the system from I/O so so we can
+- * measure the overhead of the actual reporting machinery.
+- * 
+- * This crashes with OOME's .. What is wrong!?
+- */
+-public class PerfGrepReportSinks implements ExamplePerfData {
+-
+-  @Test
+-  public void testHadoopGrep() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_greps");
+-    b.mark("begin");
+-
+-    MultiGrepReporterBuilder bld = new MultiGrepReporterBuilder(HADOOP_GREP);
+-
+-    MultiGrepReporterSink<String> snk = bld.load().iterator().next();
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_GREP).getName());
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    Histogram<String> histo = snk.getHistogram();
+-    System.out.println(histo);
+-    
+-    // from grep | wc
+-    Assert.assertEquals(230659, histo.get("NullPointerException"));
+-    Assert.assertEquals(2916, histo.get("ConnectException"));
+-    Assert.assertEquals(230663, histo.get("Lost tracker"));
+-    Assert.assertEquals(166834, histo.get("mapred.TaskTracker: Resending"));
+-    
+-    
+-    b.done();
+-  }
+-}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
+index 4db1131..8097330 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
+@@ -30,13 +30,12 @@ import com.cloudera.flume.conf.FlumeConfiguration;
+ import com.cloudera.flume.core.Event;
+ import com.cloudera.flume.core.EventUtil;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+ import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+ import com.cloudera.flume.handlers.hdfs.WriteableEvent;
+ import com.cloudera.flume.handlers.hdfs.WriteableEventKey;
+ import com.cloudera.util.Benchmark;
+ 
+-public class PerfHdfsIO implements ExamplePerfData {
++public class PerfHdfsIO {
+ 
+   @Test
+   public void testCopy() throws IOException, InterruptedException {
+@@ -44,12 +43,7 @@ public class PerfHdfsIO implements ExamplePerfData {
+     Benchmark b = new Benchmark("hdfs seqfile copy");
+     b.mark("begin");
+ 
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     File tmp = File.createTempFile("test", "tmp");
+@@ -83,12 +77,7 @@ public class PerfHdfsIO implements ExamplePerfData {
+     Benchmark b = new Benchmark("hdfs seqfile write");
+     b.mark("begin");
+ 
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     FlumeConfiguration conf = FlumeConfiguration.get();
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
+index 20fc6d5..0ac4633 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
+@@ -17,9 +17,7 @@
+  */
+ package com.cloudera.flume;
+ 
+-import java.io.File;
+ import java.io.IOException;
+-import java.util.Collection;
+ 
+ import org.junit.Test;
+ 
+@@ -27,29 +25,20 @@ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.core.EventUtil;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.reporter.MultiReporter;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.flume.reporter.builder.SimpleRegexReporterBuilder;
+-import com.cloudera.flume.reporter.histogram.RegexGroupHistogramSink;
+ import com.cloudera.util.Benchmark;
+ 
+ /**
+  * This set of performance tests isolate the system from I/O so so we can
+  * measure the overhead of the actual reporting machinery.
+  */
+-public class PerfReportSinks implements ExamplePerfData {
++public class PerfReportSinks {
+ 
+   @Test
+   public void testNullSink() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("nullsink");
+     b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     EventSink nullsnk = new NullSink();
+@@ -63,12 +52,7 @@ public class PerfReportSinks implements ExamplePerfData {
+   public void testCountSink() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("nullsink");
+     b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     CounterSink snk = new CounterSink("counter");
+@@ -78,56 +62,4 @@ public class PerfReportSinks implements ExamplePerfData {
+     b.done();
+   }
+ 
+-  @Test
+-  public void testHadoopRegexes() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_regexes");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
+-        HADOOP_REGEXES);
+-
+-    Collection<RegexGroupHistogramSink> sinks = bld.load();
+-    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_REGEXES).getName(), sinks.size());
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testHadoopRegexes11() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_regexes");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
+-        HADOOP_REGEXES_11);
+-
+-    Collection<RegexGroupHistogramSink> sinks = bld.load();
+-    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_REGEXES_11).getName(), sinks
+-        .size());
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    b.done();
+-  }
+ }
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
+index ef711f4..3eca70c 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
+@@ -25,7 +25,6 @@ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.core.EventUtil;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
+ import com.cloudera.flume.reporter.sampler.IntervalSampler;
+ import com.cloudera.flume.reporter.sampler.ProbabilitySampler;
+@@ -35,17 +34,13 @@ import com.cloudera.util.Benchmark;
+ /**
+  * Performance testing for the various samplers.
+  */
+-public class PerfSamplers implements ExamplePerfData {
++public class PerfSamplers {
+ 
+   @Test
+   public void testReservoirSampler() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("Reservoir sampler + nullsink");
+     b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     NullSink nullsnk = new NullSink();
+@@ -82,11 +77,7 @@ public class PerfSamplers implements ExamplePerfData {
+   public void testIntervalSampler() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("Interval sampler + nullsink");
+     b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     NullSink nullsnk = new NullSink();
+@@ -123,12 +114,7 @@ public class PerfSamplers implements ExamplePerfData {
+   public void testProbabilitySampler() throws IOException, InterruptedException {
+     Benchmark b = new Benchmark("Reservoir sampler + nullsink");
+     b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     NullSink nullsnk = new NullSink();
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
+deleted file mode 100644
+index 9868a53..0000000
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
++++ /dev/null
+@@ -1,86 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.handlers.text.EventExtractException;
+-import com.cloudera.flume.handlers.text.SyslogEntryFormat;
+-import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * Performance testing for the throughput of syslog and apache log format
+- * parsing.
+- */
+-public class PerfSyslogFormats implements ExamplePerfData {
+-
+-  @Test
+-  public void testSyslogFormat() throws IOException, EventExtractException,
+-      InterruptedException {
+-    Benchmark b = new Benchmark("Syslog format + nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(SYSLOG_LOG); // 23244 entires
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-
+-    b.mark("disk_loaded");
+-    Event e = null;
+-    NullSink sink = new NullSink();
+-    SyslogEntryFormat syslog = new SyslogEntryFormat();
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink.append(e2);
+-    }
+-    sink.close();
+-    b.mark("warmup done");
+-
+-    e = null;
+-    mem.open();
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink.append(e2);
+-    }
+-    sink.close();
+-    b.mark("sample dump done");
+-
+-    e = null;
+-    mem.open();
+-    CounterSink sink2 = new CounterSink("counter");
+-
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink2.append(e2);
+-    }
+-    sink2.close();
+-    b.mark("count done", sink2.getCount());
+-
+-    b.done();
+-  }
+-
+-}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
+index aa2c986..04b58e6 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
+@@ -23,9 +23,9 @@ import org.junit.Test;
+ 
+ import com.cloudera.flume.conf.FlumeConfiguration;
+ import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.batch.BatchingDecorator;
+ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+ import com.cloudera.flume.handlers.thrift.ThriftEventSink;
+ import com.cloudera.flume.handlers.thrift.ThriftEventSource;
+ import com.cloudera.util.Benchmark;
+@@ -33,30 +33,61 @@ import com.cloudera.util.Benchmark;
+ /**
+  * These tests are for microbenchmarking the thrift sink and server elements.
+  */
+-public class PerfThriftSinks implements ExamplePerfData {
++public class PerfThriftSinks {
+ 
+   /**
+-   * Pipeline is:
+-   * 
+-   * text -> mem
+-   * 
+    * mem -> ThriftEventSink -> ThriftEventSource -> NullSink
+-   * 
+-   * @throws InterruptedException
+    */
+   @Test
+   public void testThriftSend() throws IOException, InterruptedException {
+ 
+     Benchmark b = new Benchmark("nullsink");
+-
+     b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("thrift sink to thrift source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * mem -> batch(10) ThriftEventSink -> ThriftEventSource -> NullSink
++   */
++  @Test
++  public void testThriftBatchSend10() throws IOException, InterruptedException {
+ 
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     FlumeConfiguration conf = FlumeConfiguration.get();
+@@ -76,13 +107,18 @@ public class PerfThriftSinks implements ExamplePerfData {
+     drain.start(); // drain the sink.
+     b.mark("receiver_started");
+ 
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
++    final ThriftEventSink tsnk = new ThriftEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    // make size happen first all the time.
++    final BatchingDecorator snk = new BatchingDecorator(tsnk, 10, 10000000);
+     snk.open();
+     b.mark("sink_started");
+ 
+     EventUtil.dumpAll(mem, snk);
+     b.mark("thrift sink to thrift source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) tsnk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
+ 
+     tes.close();
+     snk.close();
+@@ -91,6 +127,53 @@ public class PerfThriftSinks implements ExamplePerfData {
+   }
+ 
+   /**
++   * mem -> batch(10) ThriftEventSink -> ThriftEventSource -> NullSink
++   */
++  @Test
++  public void testThriftBatchSend100() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final ThriftEventSink tsnk = new ThriftEventSink("0.0.0.0",
++        conf.getCollectorPort());
++    // make size happen first all the time.
++    final BatchingDecorator snk = new BatchingDecorator(tsnk, 100, 10000000);
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("thrift sink to thrift source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) tsnk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++  
++  /**
+    * This is slighlty different by using another thread to kick off the sink. It
+    * shouldn't really matter much.
+    * 
+@@ -106,12 +189,7 @@ public class PerfThriftSinks implements ExamplePerfData {
+     Benchmark b = new Benchmark("nullsink");
+     b.mark("begin");
+ 
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     FlumeConfiguration conf = FlumeConfiguration.get();
+@@ -131,8 +209,8 @@ public class PerfThriftSinks implements ExamplePerfData {
+     drain.start(); // drain the sink.
+     b.mark("receiver_started");
+ 
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0",
++        conf.getCollectorPort());
+ 
+     Thread t = new Thread() {
+       public void run() {
+@@ -149,6 +227,9 @@ public class PerfThriftSinks implements ExamplePerfData {
+ 
+     EventUtil.dumpAll(mem, snk);
+     b.mark("thrift sink to thrift source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
+ 
+     Thread.sleep(1000);
+     tes.close();
+@@ -173,15 +254,9 @@ public class PerfThriftSinks implements ExamplePerfData {
+   public void testThriftRawSend() throws IOException, InterruptedException {
+ 
+     Benchmark b = new Benchmark("nullsink");
+-
+     b.mark("begin");
+ 
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
++    MemorySinkSource mem = FlumeBenchmarkHarness.synthInMem();
+     b.mark("disk_loaded");
+ 
+     FlumeConfiguration conf = FlumeConfiguration.get();
+@@ -201,13 +276,16 @@ public class PerfThriftSinks implements ExamplePerfData {
+     drain.start(); // drain the sink.
+     b.mark("receiver_started");
+ 
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0",
++        conf.getCollectorPort());
+     snk.open();
+     b.mark("sink_started");
+ 
+     EventUtil.dumpAll(mem, snk);
+     b.mark("thrift sink to thrift source done");
++    // MB/s = B/us
++    b.mark("MB/s", (double) snk.getSentBytes()
++        / (double) (b.getLastDelta() / 1000));
+ 
+     tes.close();
+     snk.close();
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/TestSynthSources.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/TestSynthSources.java
+new file mode 100644
+index 0000000..2738ab9
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/TestSynthSources.java
+@@ -0,0 +1,145 @@
++/**
++ * Licensed to Cloudera, Inc.under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
++
++import java.io.IOException;
++import java.util.Arrays;
++import java.util.Map;
++
++import org.junit.Test;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.core.EventSource;
++import com.cloudera.flume.handlers.avro.AvroJsonOutputFormat;
++import com.cloudera.flume.handlers.debug.AttrSynthSource;
++import com.cloudera.flume.handlers.debug.ConsoleEventSink;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.SynthSource;
++
++/**
++ * Test cases for synthetic sources.
++ */
++public class TestSynthSources {
++  static final Logger LOG = LoggerFactory.getLogger(TestSynthSources.class);
++
++  /**
++   * Test the body generating source
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void checkSynth() throws IOException, InterruptedException {
++    EventSource src = new SynthSource(5, 10, 1337);
++    Event e = null;
++    EventSink snk = new ConsoleEventSink(new AvroJsonOutputFormat());
++    MemorySinkSource mem = new MemorySinkSource();
++    while ((e = src.next()) != null) {
++      snk.append(e); // visual inspection
++      mem.append(e); // testing
++    }
++
++    mem.open();
++    int i = 0;
++    while ((e = mem.next()) != null) {
++      i++;
++      assertEquals(10, e.getBody().length);
++    }
++    assertEquals(5, i);
++
++  }
++
++  /**
++   * This makes sure that the synth source is reopened, it will essentially
++   * generate the same output. (time stamp and machine may differ)
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void testMultipleVaryMessageBytes() throws IOException,
++      InterruptedException {
++    Event e1, e2;
++    for (EventSource src : FlumeBenchmarkHarness.createVariedMsgBytesCases()
++        .values()) {
++      src.open();
++      e1 = src.next();
++      src.open();
++      e2 = src.next();
++      assertTrue(Arrays.equals(e1.getBody(), e2.getBody()));
++    }
++  }
++
++  /**
++   * Tests to make sure we get events with the specified number of attributes,
++   * with specified attribute size, and values of specified size.
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void checkAttrSynth() throws IOException, InterruptedException {
++    EventSource src = new AttrSynthSource(5, 10, 20, 15, 1337);
++    Event e = null;
++    EventSink snk = new ConsoleEventSink(new AvroJsonOutputFormat());
++    MemorySinkSource mem = new MemorySinkSource();
++    while ((e = src.next()) != null) {
++      snk.append(e); // visual inspection
++      mem.append(e); // testing
++    }
++
++    mem.open();
++    int i = 0;
++    while ((e = mem.next()) != null) {
++      i++;
++      Map<String, byte[]> ents = e.getAttrs();
++      assertEquals(10, ents.size()); // 10 generated + 1 (service)
++      for (String a : ents.keySet()) {
++        assertEquals(20, a.length());
++      }
++      for (byte[] v : ents.values()) {
++        assertEquals(15, v.length);
++      }
++    }
++    assertEquals(5, i);
++  }
++
++  /**
++   * This makes sure that the synth source is reopened, it will essentially
++   * generate the same output. (time stamp and machine may differ)
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void testAttrsMultipleVaryMessageBytes() throws IOException,
++      InterruptedException {
++    Event e1, e2;
++    for (EventSource src : FlumeBenchmarkHarness.createVariedNumAttrsCases()
++        .values()) {
++      src.open();
++      e1 = src.next();
++      src.open();
++      e2 = src.next();
++      assertTrue(Arrays.equals(e1.getBody(), e2.getBody()));
++    }
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+index 02b0e1b..6a0fb20 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+@@ -24,8 +24,8 @@ import org.apache.log4j.Logger;
+ import org.junit.Before;
+ import org.junit.Test;
+ 
++import com.cloudera.flume.FlumeBenchmarkHarness;
+ import com.cloudera.flume.conf.FlumeSpecException;
+-import com.cloudera.util.BenchmarkHarness;
+ 
+ public class BenchmarkAgentDecos {
+ 
+@@ -38,37 +38,47 @@ public class BenchmarkAgentDecos {
+   }
+ 
+   @Test
+-  public void tiny() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.tiny);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover", BenchmarkHarness.tiny);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead", BenchmarkHarness.tiny);
++  public void tiny() throws FlumeSpecException, IOException,
++      InterruptedException {
++    FlumeBenchmarkHarness.doDecoBenchmark("nullDeco",
++        FlumeBenchmarkHarness.createTinyCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("diskFailover",
++        FlumeBenchmarkHarness.createTinyCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        FlumeBenchmarkHarness.createTinyCases());
+   }
+ 
+   @Test
+-  public void nullDecorator() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyValSize);
++  public void nullDecorator() throws FlumeSpecException, IOException,
++      InterruptedException {
++    FlumeBenchmarkHarness.doDecoBenchmark("nullDeco",
++        FlumeBenchmarkHarness.createVariedMsgBytesCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("nullDeco",
++        FlumeBenchmarkHarness.createVariedNumAttrsCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("nullDeco",
++        FlumeBenchmarkHarness.createVariedValSizeCases());
+   }
+ 
+   @Test
+-  public void dfoDecorator2() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyValSize);
++  public void dfoDecorator2() throws FlumeSpecException, IOException,
++      InterruptedException {
++    FlumeBenchmarkHarness.doDecoBenchmark("diskFailover",
++        FlumeBenchmarkHarness.createVariedMsgBytesCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("diskFailover",
++        FlumeBenchmarkHarness.createVariedNumAttrsCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("diskFailover",
++        FlumeBenchmarkHarness.createVariedValSizeCases());
+   }
+ 
+   @Test
+-  public void e2eDecorator() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyValSize);
++  public void e2eDecorator() throws FlumeSpecException, IOException,
++      InterruptedException {
++    FlumeBenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        FlumeBenchmarkHarness.createVariedMsgBytesCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        FlumeBenchmarkHarness.createVariedNumAttrsCases());
++    FlumeBenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        FlumeBenchmarkHarness.createVariedValSizeCases());
+   }
+ 
+ }
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+index 7035dbe..50fe6cc 100644
+--- a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+@@ -21,8 +21,8 @@ import java.io.IOException;
+ 
+ import org.junit.Test;
+ 
++import com.cloudera.flume.FlumeBenchmarkHarness;
+ import com.cloudera.flume.conf.FlumeSpecException;
+-import com.cloudera.util.BenchmarkHarness;
+ 
+ /**
+  * Benchmark tests on basic decorators.
+@@ -40,9 +40,12 @@ public class BenchmarkBasicDecos {
+   public void basicDecorator() throws FlumeSpecException, IOException,
+       InterruptedException {
+     for (String d : decos) {
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyMsgBytes);
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyNumAttrs);
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyValSize);
++      FlumeBenchmarkHarness.doDecoBenchmark(d,
++          FlumeBenchmarkHarness.createVariedMsgBytesCases());
++      FlumeBenchmarkHarness.doDecoBenchmark(d,
++          FlumeBenchmarkHarness.createVariedNumAttrsCases());
++      FlumeBenchmarkHarness.doDecoBenchmark(d,
++          FlumeBenchmarkHarness.createVariedValSizeCases());
+     }
+   }
+ }
+diff --git a/pom.xml b/pom.xml
+index fdbe8c0..317c43b 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -54,6 +54,19 @@
+       </modules>
+     </profile>
+ 
++    <!-- perf profile for microbenchmarks -->
++    <profile>
++      <id>perf</id>
++      <activation>
++        <activeByDefault>false</activeByDefault>
++      </activation>
++      <modules>
++        <module>flume-core</module>
++	<module>flume-microbenchmarks</module>
++      </modules>
++    </profile>
++
++
+     <!-- windows package build, docs not generated -->
+     <profile>
+       <id>windows</id>
+-- 
+1.7.0.4
+

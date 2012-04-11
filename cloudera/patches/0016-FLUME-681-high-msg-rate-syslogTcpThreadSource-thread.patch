@@ -1,0 +1,26 @@
+From 343a4b067bea92399a4299f146b6b204aa3f414f Mon Sep 17 00:00:00 2001
+From: Chetan Sarva <chetan@evidon.com>
+Date: Fri, 24 Jun 2011 16:09:33 -0700
+Subject: [PATCH 16/65] FLUME-681: high msg rate syslogTcpThreadSource threads can lead to OOM
+ - Put limit on queue.
+
+---
+ .../handlers/syslog/SyslogTcpSourceThreads.java    |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/syslog/SyslogTcpSourceThreads.java b/flume-core/src/main/java/com/cloudera/flume/handlers/syslog/SyslogTcpSourceThreads.java
+index 48971ad..30b9c47 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/syslog/SyslogTcpSourceThreads.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/syslog/SyslogTcpSourceThreads.java
+@@ -58,7 +58,7 @@ public class SyslogTcpSourceThreads extends EventSource.Base {
+ 
+   final public static int SYSLOG_TCP_PORT = 514;
+   final int port;
+-  final LinkedBlockingQueue<Event> eventsQ = new LinkedBlockingQueue<Event>();
++  final LinkedBlockingQueue<Event> eventsQ = new LinkedBlockingQueue<Event>(100000);
+   final List<ReaderThread> readers = Collections
+       .synchronizedList(new ArrayList<ReaderThread>());
+   final AtomicLong rejects = new AtomicLong();
+-- 
+1.7.0.4
+

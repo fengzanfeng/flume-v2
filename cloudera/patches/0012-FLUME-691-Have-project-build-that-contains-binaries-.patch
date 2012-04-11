@@ -1,0 +1,312 @@
+From fa5255361b84f1a241e8c3ef752da1aafd9d88cc Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Tue, 28 Jun 2011 00:37:18 -0700
+Subject: [PATCH 12/65] FLUME-691: Have project build that contains binaries and sources.
+ - commented out build number plugin because it breaks when not in git repo
+ - added project assembly option
+ - added RELEASENOTES to distributions
+
+---
+ flume-core/pom.xml                                |    5 +-
+ flume-distribution/pom.xml                        |    1 +
+ flume-distribution/src/main/assembly/dist-bin.xml |  126 +++++++++++++++++++++
+ flume-distribution/src/main/assembly/dist.xml     |   79 ++++++++++++-
+ 4 files changed, 204 insertions(+), 7 deletions(-)
+ create mode 100644 flume-distribution/src/main/assembly/dist-bin.xml
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 1121cf4..b17cc44 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -35,7 +35,8 @@
+           </dependency>
+         </dependencies>
+       </plugin>
+-
++      <!-- this breaks if not in git repo.  commented out until resolved -->
++      <!--
+       <plugin>
+         <groupId>org.codehaus.mojo</groupId>
+         <artifactId>cloudera-buildnumber-maven-plugin</artifactId>
+@@ -53,7 +54,7 @@
+           </execution>
+         </executions>
+       </plugin>
+-
++      --> 
+       <plugin>
+         <groupId>org.apache.maven.plugins</groupId>
+         <artifactId>maven-antrun-plugin</artifactId>
+diff --git a/flume-distribution/pom.xml b/flume-distribution/pom.xml
+index 9fee9d8..e8f9feb 100644
+--- a/flume-distribution/pom.xml
++++ b/flume-distribution/pom.xml
+@@ -32,6 +32,7 @@
+             <configuration>
+               <descriptors>
+                 <descriptor>src/main/assembly/dist.xml</descriptor>
++                <descriptor>src/main/assembly/dist-bin.xml</descriptor>
+               </descriptors>
+             </configuration>
+           </execution>
+diff --git a/flume-distribution/src/main/assembly/dist-bin.xml b/flume-distribution/src/main/assembly/dist-bin.xml
+new file mode 100644
+index 0000000..0deb1c0
+--- /dev/null
++++ b/flume-distribution/src/main/assembly/dist-bin.xml
+@@ -0,0 +1,126 @@
++<?xml version="1.0" encoding="UTF-8"?>
++
++<assembly
++  xmlns="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2"
++  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
++  xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
++
++  <id>bin</id>
++
++  <formats>
++    <format>dir</format>
++    <format>tar.gz</format>
++    <format>zip</format>
++  </formats>
++
++  <moduleSets>
++
++    <!-- Copy flume core jar to lib -->
++    <moduleSet>
++      <useAllReactorProjects>true</useAllReactorProjects>
++
++      <binaries>
++        <outputDirectory>lib</outputDirectory>
++        <unpack>false</unpack>
++        <includes />
++
++        <dependencySets>
++          <dependencySet>
++            <outputDirectory>lib</outputDirectory>
++            <includes />
++          </dependencySet>
++        </dependencySets>
++      </binaries>
++
++      <includes>
++        <include>com.cloudera:flume-core</include>
++      </includes>
++    </moduleSet>
++
++    <!-- Copy flume master web app -->
++    <moduleSet>
++      <useAllReactorProjects>true</useAllReactorProjects>
++
++      <binaries>
++        <outputDirectory>webapps</outputDirectory>
++        <outputFileNameMapping>flumemaster.${module.extension}</outputFileNameMapping>
++        <unpack>false</unpack>
++        <includes />
++      </binaries>
++
++      <includes>
++        <include>com.cloudera:flume-config-web</include>
++      </includes>
++    </moduleSet>
++
++    <!-- Copy flume agent web app -->
++    <moduleSet>
++      <useAllReactorProjects>true</useAllReactorProjects>
++
++      <binaries>
++        <outputDirectory>webapps</outputDirectory>
++        <outputFileNameMapping>flumeagent.${module.extension}</outputFileNameMapping>
++        <unpack>false</unpack>
++        <includes />
++      </binaries>
++
++      <includes>
++        <include>com.cloudera:flume-node-web</include>
++      </includes>
++    </moduleSet>
++
++  </moduleSets>
++
++  <fileSets>
++
++    <!-- Copy bin directory -->
++    <fileSet>
++      <outputDirectory>bin</outputDirectory>
++      <directory>../bin</directory>
++      <includes />
++    </fileSet>
++
++    <!-- Copy conf directory -->
++    <fileSet>
++      <outputDirectory>conf</outputDirectory>
++      <directory>../conf</directory>
++      <includes />
++    </fileSet>
++
++    <!-- Copy contrib directory -->
++    <fileSet>
++      <outputDirectory>contrib</outputDirectory>
++      <directory>../contrib</directory>
++      <includes />
++    </fileSet>
++
++    <!-- Copy docs directory -->
++    <fileSet>
++      <outputDirectory>docs</outputDirectory>
++      <directory>../flume-docs/target/docs</directory>
++      <includes />
++    </fileSet>
++
++    <!-- copy the man pages -->
++    <fileSet>
++      <outputDirectory>docs/man</outputDirectory>
++      <directory>../docs/man</directory>
++      <includes />
++    </fileSet>
++
++    <!-- Copy miscellaneous top level files -->
++    <fileSet>
++      <directory>../</directory>
++      <includes>
++        <include>CHANGELOG.html</include>
++        <include>DEVNOTES</include>
++        <include>LICENSE</include>
++        <include>NOTICE</include>
++        <include>README</include>
++        <include>RELEASENOTES</include>
++      </includes>
++    </fileSet>
++
++  </fileSets>
++
++</assembly>
+diff --git a/flume-distribution/src/main/assembly/dist.xml b/flume-distribution/src/main/assembly/dist.xml
+index 2c78a09..adecb35 100644
+--- a/flume-distribution/src/main/assembly/dist.xml
++++ b/flume-distribution/src/main/assembly/dist.xml
+@@ -5,7 +5,7 @@
+   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://maven.apache.org/plugins/maven-assembly-plugin/assembly/1.1.2 http://maven.apache.org/xsd/assembly-1.1.2.xsd">
+ 
+-  <id>bin</id>
++  <id>project</id>
+ 
+   <formats>
+     <format>dir</format>
+@@ -19,15 +19,37 @@
+     <moduleSet>
+       <useAllReactorProjects>true</useAllReactorProjects>
+ 
++      <sources>
++        <outputDirectory>/</outputDirectory>
++        <includes />
++	<excludes>
++	  <!-- maven build stuff -->
++	  <exclude>**/target/**</exclude>
++	  <!-- default eclipse junk -->
++	  <exclude>**/bin/**</exclude>
++	  <exclude>**/.settings/**</exclude>
++	  <exclude>**/.project</exclude>
++	  <exclude>**/.classpath</exclude>
++	  <exclude>**/.gitignore</exclude>
++	</excludes>
++      </sources>
++
+       <binaries>
+-        <outputDirectory>lib</outputDirectory>
++        <outputDirectory>/</outputDirectory>
+         <unpack>false</unpack>
+         <includes />
+ 
+         <dependencySets>
+           <dependencySet>
++	    <scope>provided</scope>
++            <outputDirectory>/</outputDirectory>
++	    <useProjectArtifact>false</useProjectArtifact>
++          </dependencySet>
++
++          <dependencySet>
++	    <scope>runtime</scope>
+             <outputDirectory>lib</outputDirectory>
+-            <includes />
++	    <useProjectArtifact>false</useProjectArtifact>
+           </dependencySet>
+         </dependencySets>
+       </binaries>
+@@ -92,6 +114,10 @@
+       <outputDirectory>contrib</outputDirectory>
+       <directory>../contrib</directory>
+       <includes />
++      <excludes>
++	<exclude>**/gen-cpp/*</exclude>
++	<exclude>**/gen-cpp</exclude>
++      </excludes>
+     </fileSet>
+ 
+     <!-- Copy docs directory -->
+@@ -101,7 +127,7 @@
+       <includes />
+     </fileSet>
+ 
+-    <!-- copy the man pages -->
++    <!-- Copy the man pages -->
+     <fileSet>
+       <outputDirectory>docs/man</outputDirectory>
+       <directory>../docs/man</directory>
+@@ -117,8 +143,51 @@
+         <include>LICENSE</include>
+         <include>NOTICE</include>
+         <include>README</include>
+-	<include>RELEASENOTES</include>
++        <include>pom.xml</include>
++        <include>pmd.xml</include>
++        <include>RELEASENOTES</include>
++      </includes>
++    </fileSet>
++
++    <!-- Copy flume sources -->
++    <fileSet>
++      <outputDirectory>/</outputDirectory>
++      <directory>../</directory>
++      <includes>
++	<include>flume-config-web/**</include>
++	<include>flume-distribution/**</include>
++	<include>flume-docs/**</include>
++	<include>flume-log4j-appender/**</include>
++	<include>flume-node-web/**</include>
++	<include>flume-windows-dist/**</include>
+       </includes>
++      <excludes>
++	<exclude>**/target/**</exclude>
++	<exclude>**/target</exclude>
++	<!-- default eclipse junk -->
++	<exclude>**/bin/**</exclude>
++	<exclude>**/.settings/**</exclude>
++	<exclude>**/.project</exclude>
++	<exclude>**/.classpath</exclude>
++	<exclude>**/.gitignore</exclude>
++      </excludes>
++    </fileSet>
++
++    <!-- Copy flume plugin sources -->
++    <fileSet>
++      <outputDirectory>plugins</outputDirectory>
++      <directory>../plugins/</directory>
++      <includes/>
++      <excludes>
++	<exclude>**/target/**</exclude>
++	<exclude>**/target/</exclude>
++	<!-- default eclipse junk -->
++	<exclude>**/bin/**</exclude>
++	<exclude>**/.settings/**</exclude>
++	<exclude>**/.project</exclude>
++	<exclude>**/.classpath</exclude>
++	<exclude>**/.gitignore</exclude>
++      </excludes>
+     </fileSet>
+ 
+   </fileSets>
+-- 
+1.7.0.4
+

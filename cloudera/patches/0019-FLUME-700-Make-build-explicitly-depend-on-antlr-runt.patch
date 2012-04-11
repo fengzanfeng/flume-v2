@@ -1,0 +1,58 @@
+From 6e1505476107fdbb588aead472363d1d95c647c0 Mon Sep 17 00:00:00 2001
+From: Alejandro Abdelnur <tucu00@gmail.com>
+Date: Wed, 6 Jul 2011 22:10:17 -0700
+Subject: [PATCH 19/65] FLUME-700: Make build explicitly depend on antlr-runtime.
+
+The build previously used an implicit dependency on antlr-runtime. If the version
+dependency plugin is used this can cause situations where older versions win out. To
+fix this we add an explicit dependency to the build which ensure that the version
+flume requires wins.
+---
+ flume-core/pom.xml |    5 +++++
+ pom.xml            |   12 ++++++++++++
+ 2 files changed, 17 insertions(+), 0 deletions(-)
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 6b5bce7..89243e7 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -233,6 +233,11 @@
+ 
+     <dependency>
+       <groupId>org.antlr</groupId>
++      <artifactId>antlr-runtime</artifactId>
++    </dependency>
++
++    <dependency>
++      <groupId>org.antlr</groupId>
+       <artifactId>stringtemplate</artifactId>
+     </dependency>
+ 
+diff --git a/pom.xml b/pom.xml
+index 317c43b..b7f5ced 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -444,8 +444,20 @@
+ 
+       <dependency>
+         <groupId>org.antlr</groupId>
++        <artifactId>antlr-runtime</artifactId>
++        <version>3.2</version>
++      </dependency>
++
++      <dependency>
++        <groupId>org.antlr</groupId>
+         <artifactId>stringtemplate</artifactId>
+         <version>3.2</version>
++        <exclusions>
++          <exclusion>
++            <groupId>antlr</groupId>
++            <artifactId>antlr</artifactId>
++          </exclusion>
++        </exclusions>
+       </dependency>
+ 
+       <dependency>
+-- 
+1.7.0.4
+

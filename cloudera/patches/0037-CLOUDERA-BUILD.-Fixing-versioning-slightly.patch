@@ -1,0 +1,25 @@
+From 1929afee8e31edc04bcc9b9c460e4b639c11b517 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew.bayer@gmail.com>
+Date: Fri, 22 Jul 2011 11:45:12 -0700
+Subject: [PATCH 37/65] CLOUDERA-BUILD. Fixing versioning slightly.
+
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 5e1adf3..83fe5e9 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -11,7 +11,7 @@
+ 
+   <groupId>com.cloudera</groupId>
+   <artifactId>flume</artifactId>
+-  <version>${cdh.flume.version}</version>
++  <version>0.9.4-cdh3u2-SNAPSHOT</version>
+   <packaging>pom</packaging>
+   <name>Flume</name>
+ 
+-- 
+1.7.0.4
+

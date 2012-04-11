@@ -1,0 +1,30 @@
+From 1580e91ac8482fdef2478df46a8ce859dc72ee96 Mon Sep 17 00:00:00 2001
+From: Alejandro Abdelnur <tucu00@gmail.com>
+Date: Wed, 6 Jul 2011 13:51:47 -0700
+Subject: [PATCH 22/65] FLUME-703: Make default thrift compiler location based off of THRIFT_HOME env variable
+
+The maven build requires thrift to live in a particular location or be specified by
+the thrift.executable property at the command line. For example 'mvn
+-Dthrift.executable=/usr/local/bin/thrift'. This patch will attempt to use a
+THRIFT_HOME env variable as a default location for thrift. In the previous example
+THRIFT_HOME would be /usr/local.
+---
+ pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index b7f5ced..789edcd 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -11,7 +11,7 @@
+   <properties>
+     <!-- NB: The version of the thrift compiler must match that of the dependency 
+       on the jar file below. -->
+-    <thrift.executable>/usr/local/bin/thrift</thrift.executable>
++    <thrift.executable>${env.THRIFT_HOME}/bin/thrift</thrift.executable>
+ 
+     <!-- Set default encoding to UTF-8 to remove maven complaints -->
+     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+-- 
+1.7.0.4
+

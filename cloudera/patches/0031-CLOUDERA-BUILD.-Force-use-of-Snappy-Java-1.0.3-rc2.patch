@@ -1,0 +1,54 @@
+From 3aaa734feb03c103963b443f60eaa5dc33fc7444 Mon Sep 17 00:00:00 2001
+From: Alejandro Abdelnur <tucu@cloudera.com>
+Date: Fri, 15 Jul 2011 11:54:38 -0700
+Subject: [PATCH 31/65] CLOUDERA-BUILD. Force use of Snappy-Java 1.0.3-rc2.
+
+The Snappy-Java version brought in by Avro 1.5.1 breaks in CentOS 5.5
+due to system native libraries version mismatch.
+---
+ flume-core/pom.xml |    5 +++++
+ pom.xml            |   12 ++++++++++++
+ 2 files changed, 17 insertions(+), 0 deletions(-)
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index cbdda10..98e3481 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -267,6 +267,11 @@
+     </dependency>
+ 
+     <dependency>
++      <groupId>org.xerial.snappy</groupId>
++      <artifactId>snappy-java</artifactId>
++    </dependency>
++
++    <dependency>
+       <groupId>org.apache.avro</groupId>
+       <artifactId>avro-compiler</artifactId>
+     </dependency>
+diff --git a/pom.xml b/pom.xml
+index 93799e8..d5fec46 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -555,6 +555,18 @@
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro</artifactId>
+         <version>1.5.1</version>
++        <exclusions>
++          <exclusion>
++            <groupId>org.xerial.snappy</groupId>
++            <artifactId>snappy-java</artifactId>
++          </exclusion>
++        </exclusions>
++      </dependency>
++
++      <dependency>
++        <groupId>org.xerial.snappy</groupId>
++        <artifactId>snappy-java</artifactId>
++        <version>1.0.3-rc2</version>
+       </dependency>
+ 
+       <dependency>
+-- 
+1.7.0.4
+

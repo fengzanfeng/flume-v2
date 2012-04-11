@@ -1,0 +1,25 @@
+From 986c5afe9be1ae7c8139b73bbf6b160089b8a447 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Thu, 20 Oct 2011 15:43:52 -0700
+Subject: [PATCH 60/65] Fixing version
+
+---
+ flume-distribution/pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/flume-distribution/pom.xml b/flume-distribution/pom.xml
+index a4be488..395cb43 100644
+--- a/flume-distribution/pom.xml
++++ b/flume-distribution/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u2</version>
++    <version>0.9.4-cdh3u3-SNAPSHOT</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+-- 
+1.7.0.4
+

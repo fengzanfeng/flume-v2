@@ -1,0 +1,186 @@
+From 82781154480a2a78c509d73e1c3c7fdb34b97bc6 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Tue, 20 Dec 2011 10:12:21 -0800
+Subject: [PATCH 65/65] Updating for CDH3u3 release.
+
+---
+ cloudera/do-release-build               |    2 +-
+ flume-config-web/pom.xml                |    2 +-
+ flume-core/pom.xml                      |    2 +-
+ flume-distribution/pom.xml              |    2 +-
+ flume-docs/pom.xml                      |    2 +-
+ flume-log4j-appender/pom.xml            |    2 +-
+ flume-microbenchmarks/pom.xml           |    2 +-
+ flume-node-web/pom.xml                  |    2 +-
+ flume-windows-dist/pom.xml              |    2 +-
+ plugins/flume-plugin-hbasesink/pom.xml  |    2 +-
+ plugins/flume-plugin-helloworld/pom.xml |    2 +-
+ pom.xml                                 |    4 ++--
+ 12 files changed, 13 insertions(+), 13 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index b1afc66..2bd9fa9 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -18,7 +18,7 @@
+ 
+ ####################
+ # Performs a release build
+-FULL_VERSION=0.9.4-cdh3u3-SNAPSHOT
++FULL_VERSION=0.9.4-cdh3u3
+ 
+ # resolve links - $0 may be a softlink
+ PRG="${0}"
+diff --git a/flume-config-web/pom.xml b/flume-config-web/pom.xml
+index 3b5f3c6..e7c8643 100644
+--- a/flume-config-web/pom.xml
++++ b/flume-config-web/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 4d3f074..52dee28 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-distribution/pom.xml b/flume-distribution/pom.xml
+index 395cb43..689eb42 100644
+--- a/flume-distribution/pom.xml
++++ b/flume-distribution/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-docs/pom.xml b/flume-docs/pom.xml
+index bb1e1af..be17594 100644
+--- a/flume-docs/pom.xml
++++ b/flume-docs/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-log4j-appender/pom.xml b/flume-log4j-appender/pom.xml
+index 1ac14f3..ec7b65f 100644
+--- a/flume-log4j-appender/pom.xml
++++ b/flume-log4j-appender/pom.xml
+@@ -22,7 +22,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-microbenchmarks/pom.xml b/flume-microbenchmarks/pom.xml
+index 2feea34..a544ae7 100644
+--- a/flume-microbenchmarks/pom.xml
++++ b/flume-microbenchmarks/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-node-web/pom.xml b/flume-node-web/pom.xml
+index f31a31d..8fcfb0c 100644
+--- a/flume-node-web/pom.xml
++++ b/flume-node-web/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/flume-windows-dist/pom.xml b/flume-windows-dist/pom.xml
+index b029dbc..2612c9c 100644
+--- a/flume-windows-dist/pom.xml
++++ b/flume-windows-dist/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+     <relativePath>../pom.xml</relativePath>
+   </parent>
+ 
+diff --git a/plugins/flume-plugin-hbasesink/pom.xml b/plugins/flume-plugin-hbasesink/pom.xml
+index b423f15..413a508 100644
+--- a/plugins/flume-plugin-hbasesink/pom.xml
++++ b/plugins/flume-plugin-hbasesink/pom.xml
+@@ -5,7 +5,7 @@
+     <relativePath>../../pom.xml</relativePath>
+     <groupId>com.cloudera</groupId>
+     <artifactId>flume</artifactId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+   </parent>
+ 
+   <modelVersion>4.0.0</modelVersion>
+diff --git a/plugins/flume-plugin-helloworld/pom.xml b/plugins/flume-plugin-helloworld/pom.xml
+index 660ecf1..1b933cc 100644
+--- a/plugins/flume-plugin-helloworld/pom.xml
++++ b/plugins/flume-plugin-helloworld/pom.xml
+@@ -6,7 +6,7 @@
+     <relativePath>../../pom.xml</relativePath>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.4-cdh3u3-SNAPSHOT</version>
++    <version>0.9.4-cdh3u3</version>
+   </parent>
+ 
+   <groupId>com.cloudera.flume.plugin</groupId>
+diff --git a/pom.xml b/pom.xml
+index ce4dc36..d30b69f 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -5,13 +5,13 @@
+   <parent>
+     <groupId>com.cloudera.cdh</groupId>
+     <artifactId>cdh-root</artifactId>
+-    <version>3.0-u3-SNAPSHOT</version>
++    <version>3.0-u3</version>
+     <relativePath>../../../pom.xml</relativePath>
+   </parent>
+ 
+   <groupId>com.cloudera</groupId>
+   <artifactId>flume</artifactId>
+-  <version>0.9.4-cdh3u3-SNAPSHOT</version>
++  <version>0.9.4-cdh3u3</version>
+   <packaging>pom</packaging>
+   <name>Flume</name>
+ 
+-- 
+1.7.0.4
+

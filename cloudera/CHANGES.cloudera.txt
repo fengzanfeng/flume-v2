@@ -1,0 +1,530 @@
+commit 82781154480a2a78c509d73e1c3c7fdb34b97bc6
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Tue Dec 20 10:12:21 2011 -0800
+
+    Updating for CDH3u3 release.
+
+commit d1580948e66f8b7501e3b4dfc11b032a60535c5e
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Sun Dec 18 19:07:41 2011 -0800
+
+    CDH-3882, backport of Flume-798. Fixing timing issue in the test
+
+commit aea41e51be4aff1b00f4f1a5baffe900e9542f7a
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Fri Dec 16 16:39:54 2011 -0800
+
+    CDH-3936. Backport Flume-883
+
+commit 6d314e3e21cd374adbc750eea4d22a11ab23b9b9
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Fri Dec 16 16:06:35 2011 -0800
+
+    CDH-3882, backport of Flume-798
+
+commit 926733bf4c551175246bb887f43db50bad371a64
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Fri Dec 16 15:58:44 2011 -0800
+
+    CDH-3884, backport Flume-857
+
+commit 986c5afe9be1ae7c8139b73bbf6b160089b8a447
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Thu Oct 20 15:43:52 2011 -0700
+
+    Fixing version
+
+commit afb54c09af1a801212825af051ea3fe7fa516abd
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Thu Oct 20 09:20:51 2011 -0700
+
+    Updating for CDH3u3 development
+
+commit 7a400793e8590479fd42a234dca5efec8153dce5
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Thu Aug 25 12:16:32 2011 +0000
+
+    FLUME-721: Webapps 'autofindport' feature does not work
+    
+    This refactors the internal http server so that context are created by a callback object.
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3660
+
+commit 49f6292c1ccd8ee9187021fe0f9e7c1977a2c3df
+Author: Roman Shaposhnik <rvs@cloudera.com>
+Date:   Wed Oct 5 15:08:07 2011 -0700
+
+    FLUME-770: setting FLUME_IDENT_STRING based on $USER is not robust
+    
+    Reason: Bug
+    Author: Roman Shaposhnik
+    Ref: DISTRO-321
+
+commit ceb3b3eb7af2f10989c4b72e3a00246c9eac27df
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Fri Sep 30 09:42:51 2011 -0700
+
+    Prep for CDH3u2 release
+
+commit f40827cf67f0d543e4b5ba591dd2fd03e7f51020
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Aug 10 07:31:15 2011 -0700
+
+    FLUME-734: escapedFormatDfs goes into a file creation frenzy
+
+commit 70fec87f46dcd339ea63d6c092cbc67e8a906cb4
+Author: Prasad Mujumdar <prasadm@cloudera.com>
+Date:   Fri Sep 30 16:23:44 2011 -0700
+
+    CDH-3645: Flume-762+Flume-768
+
+commit 7095bf0e556b43ced7112b777baa31984efeecbf
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Fri Sep 23 15:08:02 2011 -0700
+
+    CLOUDERA-BUILD: Include git hash properly in do-release-build
+
+commit d63a68917717669823871dcc0e53c5cbce6e6731
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Fri Sep 23 09:56:17 2011 -0700
+
+    CDH-3636. Update flume to use snappy-java-1.0.3.2.
+    
+    Update Flume to use the same snappy-java version as the rest of
+    CDH. Doing this by removing the explicit dependency and the exclusion
+    in Avro so that we pick up Avro's snappy-java dependency.
+    
+    Reason: Bug
+    Author: Andrew Bayer
+    Ref: CDH-3636
+
+commit 8ea9f3566ff3019ff10d9c6eceb8a2a420dde3fb
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat Aug 20 00:48:50 2011 +0000
+
+    FLUME-745: Race condition in NaiveFileWALDeco and retransmit logic
+    
+    - Setup test to run for a long time exacerbating potential race every 10ms.
+    - Made test runnable from command line for arbitrary iterations
+    - Eliminated possible memory leak by remove WALdata entry after completing e2eacked
+    - NaiveFileWALDeco to use object lock
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3854
+
+commit 0f2f783cdea9830d9483f5daea5adb8179bef60b
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat Aug 20 00:48:44 2011 +0000
+
+    FLUME-746: Correct the behavior and logging messages about states transition of wal chunks on retry
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3854
+
+commit 90dfc86bf4c08009e5d064075fe67534e536503c
+Author: Roman Shaposhnik <rvs@cloudera.com>
+Date:   Thu Sep 22 13:54:36 2011 -0700
+
+    FLUME-766: Flume needs to be consistent with autodiscovery of Hadoop compression codecs
+    
+    Reason: Bug
+    Author: Roman Shaposhnik
+    Ref: CDH-1505, CDH-3037
+
+commit 552f83ebc302ca99591e6cbc3bdd173e7dd44eca
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sun Sep 18 11:05:42 2011 -0700
+
+    FLUME-580: Flume needs to be consistent with autodiscovery of Hadoop compression codecs
+    
+    - Adds native paths for hadoop native codec support
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3329
+
+commit c7381e3ca1948378aa88b86610bd29beeae0c341
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Thu Aug 25 11:17:35 2011 +0000
+
+    FLUME-706: Flume nodes launch duplicate logical nodes
+    
+    When a logical node is being spawned for the first time we attempt to load the config of the node.  Unfortunately, we would subsequently load it
+    again and spawn a second driver thread because we neglected to update the last good config version.  This fixes the problem by making sure that
+    value gets updated on the first attempt.   We also update error handling so that a failure of signle logical node spawn only affects that node.
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3552
+
+commit d2b52f66a44de85d8cd7f7d1a34d9d36ff41a06a
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Thu Aug 25 12:16:17 2011 +0000
+
+    FLUME-720: CollectorSink doesn't pass the new format parameter
+    
+    Reason: Bug
+    Author: Jonathan Hsieh
+    Ref: CDH-3329
+
+commit 6edcd1aa494ba5b31c295ddb397c810f26859689
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Tue Sep 13 08:05:24 2011 -0700
+
+    FLUME-759: Fix Regression due to avro 1.5.2 upgrade (Tom White)
+    
+    Reason: Feature / Bug
+    Author: Tom White
+    Ref: CDH-3329
+    
+    git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1170202 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 7cfd7694a9392479bb3a8e3b6955ab1af493501a
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Sat Sep 3 16:46:26 2011 +0000
+
+    FLUME-755: Upgrade dependency to Avro 1.5.3 (Alejandro Abdelnur)
+    
+    Reason: Feature
+    Author: Alejandro Abdelnur
+    Ref: CDH-3417
+    
+    git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1164886 13f79535-47bb-0310-9956-ffa450edef68
+
+commit b783d30d588237a0c299567de2a9746581c0f935
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Wed Aug 17 16:31:14 2011 +0000
+
+    FLUME-741: Update Avro version to 1.5.2 (Tom White)
+    
+    Reason: Feature
+    Author: Tom White
+    Ref: CDH-3329
+    
+    git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1158811 13f79535-47bb-0310-9956-ffa450edef68
+
+commit e9cbca077f9b9501e354cc980f337a34c33847f4
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Tue Sep 6 00:49:37 2011 +0000
+
+    FLUME-758: Test Excludes on maven build doesn't always work
+    
+    Surefire 2.8.1 does not allow for lists of excluded tests to be specified via command line.
+    We force the build to use surefire 2.6 which does.
+    
+    Verions 2.9, 2.8, 2.7.2, 2.7.1 and 2.7 were also tested and they failed to exclude.
+    
+    git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1165464 13f79535-47bb-0310-9956-ffa450edef68
+
+commit ed708111f2ad92f83a9c3bce7767afe59134425b
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Thu Jul 21 11:53:39 2011 -0700
+
+    FLUME-716: Add ability to exclude or include arbitrary tests to maven build
+
+commit d3975f0d12faa7847f838cb6b014957ef22eabf5
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sun Sep 4 09:23:33 2011 -0700
+
+    Revert "CLOUDERA-BUILD: exclude flakey tests"
+    
+    This reverts commit 9f532a294e51552557cdc8d54b704036c4383b27.
+
+commit bebac3d77f3f1b695707121c777858536bca8769
+Author: Jonathan Hsieh <jmhsieh@apache.org>
+Date:   Wed Aug 17 14:29:03 2011 +0000
+
+    FLUME-742: TestAvroSink fails (Tom White)
+    
+    Reason: Feature
+    Author: Tom White
+    Ref: CDH-3329
+    
+    git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1158737 13f79535-47bb-0310-9956-ffa450edef68
+
+commit 16b46194ea2981cdbf3cbcbeecb38a722f915670
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Fri Jul 22 13:53:34 2011 -0700
+
+    CLOUDERA-BUILD. Missed one version reference.
+
+commit 1929afee8e31edc04bcc9b9c460e4b639c11b517
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Fri Jul 22 11:45:12 2011 -0700
+
+    CLOUDERA-BUILD. Fixing versioning slightly.
+
+commit 60d0241a73725d106b29ee698cfb98de11ca7920
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Fri Jul 22 10:06:28 2011 -0700
+
+    CLOUDERA-BUILD. POM cleanup.
+
+commit 18a2dad460a05e1274b4ac5cee4a161f9ceb97b3
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Fri Jul 22 09:48:20 2011 -0700
+
+    CLOUDERA-BUILD. Updating for CDH3u2 SNAPSHOT.
+
+commit e3fc4234cdaa6865b53cfc0f9620ea87a6ded4f0
+Author: Andrew Bayer <andrew@cloudera.com>
+Date:   Wed Aug 10 13:34:17 2011 -0700
+
+    CLOUDERA-BUILD. Fixes CDH-3386, DISTRO-293.
+    
+    Calling mvn with package, rather than install, results in the assembly
+    both using the locally built flume-core SNAPSHOT jar from the reactor
+    and the deployed unique version SNAPSHOT jar (the one with the
+    timestamp in its filename) from the remote Maven repo. In general,
+    there's no reason not to use install rather than package.
+    
+    Also added source:jar and javadoc:javadoc goals for DISTRO-293.
+
+commit bbd7cae8d3e01d5831d227cf6883ebc70d802734
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Thu Jul 28 07:09:51 2011 -0700
+
+    FLUME-718: FlumeConfiguration should have default webapp paths
+
+commit de8139ab4a945acb92b3e32160575f70ce66b792
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sat Jul 30 09:11:52 2011 -0700
+
+    FLUME-719: Flume attribute field map from Avro|ThriftEventConvertUtil.toFlumeEvent() should be mutable
+
+commit 3aaa734feb03c103963b443f60eaa5dc33fc7444
+Author: Alejandro Abdelnur <tucu@cloudera.com>
+Date:   Fri Jul 15 11:54:38 2011 -0700
+
+    CLOUDERA-BUILD. Force use of Snappy-Java 1.0.3-rc2.
+    
+    The Snappy-Java version brought in by Avro 1.5.1 breaks in CentOS 5.5
+    due to system native libraries version mismatch.
+
+commit dce2b7b06c8b09543854d16aeb7808836c00c294
+Author: Arvind Prabhakar <arvind@cloudera.com>
+Date:   Thu Jul 14 14:54:58 2011 -0700
+
+    Enabling full-build profile for including docs.
+
+commit 311ed8364dac0e00adaaed96af4c2cdd24d8cfa8
+Author: Arvind Prabhakar <arvind@cloudera.com>
+Date:   Thu Jul 14 14:49:28 2011 -0700
+
+    Fix for broken dock build.
+    
+    Includes minimal changes necessary to get the docs to build on
+    CentOS with AsciiDoc version 8.1.0.
+
+commit 3f9f7b828e78a388ff04cead211a3be926cd3873
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Tue Jul 12 14:38:17 2011 -0700
+
+    CLOUDERA-BUILD. Need to manually set FULL_VERSION after all, for the debian build.
+
+commit cadb2848eb34bba0058661fd13856ff6252b3fa7
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Tue Jul 12 11:23:17 2011 -0700
+
+    CLOUDERA-BUILD. Removing FULL_VERSION declaration from do-release-build.
+
+commit 3a6815694eff7f388b1519d08685872a8612ceb3
+Author: Andrew Bayer <andrew.bayer@gmail.com>
+Date:   Tue Jul 12 09:42:41 2011 -0700
+
+    CLOUDERA-BUILD. Fixing version number.
+
+commit 9f532a294e51552557cdc8d54b704036c4383b27
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Tue Jul 5 23:13:06 2011 -0700
+
+    CLOUDERA-BUILD: exclude flakey tests
+    - TestCollectorSink
+    - TestLivenessManager
+    - TestConcurrentWALMan
+    - TestConcurrentDFOMan
+    - TestTailSource.java
+
+commit e9b3e65fd25788fdb0a31c6273b1c6d5f391270f
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Jul 6 23:16:51 2011 -0700
+
+    CLOUDERA-BUILD: convert to maven build
+    - Add cloudera snapshot repos
+    - Use org.apache instead of com.cloudera for zk and hadoop.
+    - Add cloudera dir to assembly
+    - New do_release_build handles THRIFT_HOME and FULL_VERSION
+    - NOTE: this version currently excludes docs build
+
+commit 328bc93a740c96d63e0e200d11a394b5115334be
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Tue Jul 5 15:26:54 2011 -0700
+
+    Update version to 0.9.4-cdh3u1-SNAPSHOT
+
+commit 1580e91ac8482fdef2478df46a8ce859dc72ee96
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Wed Jul 6 13:51:47 2011 -0700
+
+    FLUME-703: Make default thrift compiler location based off of THRIFT_HOME env variable
+    
+    The maven build requires thrift to live in a particular location or be specified by
+    the thrift.executable property at the command line. For example 'mvn
+    -Dthrift.executable=/usr/local/bin/thrift'. This patch will attempt to use a
+    THRIFT_HOME env variable as a default location for thrift. In the previous example
+    THRIFT_HOME would be /usr/local.
+
+commit e303ba534540b5b9d732aff0eeceaa5e01c083d7
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Wed Jul 6 13:50:42 2011 -0700
+
+    FLUME-702: Make git hash an argument to the build
+    
+    The buildnumber plugin fails when attempting to build from a non git repo. This
+    allows the user to specify a git hash via a -Dbuild.revision argument at the maven
+    command line.
+
+commit 06a160189d0f840bb81e76bff29766305a7d5162
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Wed Jul 6 22:11:32 2011 -0700
+
+    FLUME-701: Make flume project tar generated contents live inside ./flume-<version>/
+    
+    Currently, when a tarball is generated by the flume-distribution module, all
+    contents within the tarball live in ./flume-distribution-<version>/. This patch
+    changes it so that contents within the tarball lives in ./flume-<version>/
+
+commit 6e1505476107fdbb588aead472363d1d95c647c0
+Author: Alejandro Abdelnur <tucu00@gmail.com>
+Date:   Wed Jul 6 22:10:17 2011 -0700
+
+    FLUME-700: Make build explicitly depend on antlr-runtime.
+    
+    The build previously used an implicit dependency on antlr-runtime. If the version
+    dependency plugin is used this can cause situations where older versions win out. To
+    fix this we add an explicit dependency to the build which ensure that the version
+    flume requires wins.
+
+commit c4e4a17427132771a8cab7c0de1b45eadfef3a33
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sat Jul 2 14:20:47 2011 -0700
+
+    FLUME-697: ExecNioSource has an unbounded queue that can cause OOME
+
+commit 3ac1f7b4d7f7597885150699271292890d5add94
+Author: E. Sammer <esammer@cloudera.com>
+Date:   Fri Mar 18 17:10:32 2011 -0400
+
+    FLUME-499: Names of incomplete files being written to hdfs should indicate they are incomplete
+
+commit 343a4b067bea92399a4299f146b6b204aa3f414f
+Author: Chetan Sarva <chetan@evidon.com>
+Date:   Fri Jun 24 16:09:33 2011 -0700
+
+    FLUME-681: high msg rate syslogTcpThreadSource threads can lead to OOM
+    - Put limit on queue.
+
+commit 60f2358485f60392075e457c9f078a612b51b738
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Fri Jul 1 11:10:27 2011 -0700
+
+    Backport FLUME-603: changed version in flume-microbenchmarks pom file to make compatible with 0.9.4 branch.
+
+commit 288a04fc4221e65e2d18c6ebce6bd906de191fb7
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sat Apr 16 10:57:43 2011 -0700
+
+    FLUME-603: Revisit Performance tests
+    - Remove dependencies on non-existing data sets.
+    - Remove reporting tests (not relevent/supported)
+    - Add some accounting to avro sink to present proper MB/s statistitcs on batched datasets
+    - Update Maven build to create "microbenchmarks" profile
+
+commit 33e0157446132c7b48214f7bb0d9c3795a040173
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Jun 22 17:47:43 2011 -0700
+
+    FLUME-603: Move to flume-microbenchmarks dir
+
+commit fa5255361b84f1a241e8c3ef752da1aafd9d88cc
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Tue Jun 28 00:37:18 2011 -0700
+
+    FLUME-691: Have project build that contains binaries and sources.
+    - commented out build number plugin because it breaks when not in git repo
+    - added project assembly option
+    - added RELEASENOTES to distributions
+
+commit 18be95aba83f33b354c76bfeac15c7545df83e2d
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Sun Jun 19 21:50:57 2011 -0700
+
+    FLUME-273:  RollSink should expose ability to configure SizeTrigger
+
+commit 9d1834ae88781ce5ae9ad5abcbeaadeb2a3d1603
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Fri Jun 17 17:55:54 2011 -0700
+
+    FLUME-512: Must rethrow Throwables in RollSink
+    - some throwables such as NoClassDefFoundError are Errors which are not exceptions and would inadvertently get swallowed.
+
+commit dbb37697e41963dfd50a0a66641277d1a64279a3
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Fri Jun 17 17:53:52 2011 -0700
+
+    FLUME-666: TailSource.close should block until subthread is closed.
+
+commit 7a5f9a5f02a34533a46534c8904d0095f327f3df
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Jun 15 00:43:53 2011 -0700
+
+    FLUME-658: Handle Unexpected RuntimeExceptions diffrerently than IOExceptions in sinks and decorators
+
+commit 15e4416396ace7734c61b544752e308257097c4e
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Mon Jun 13 23:42:03 2011 -0700
+
+    FLUME-656: Flume node deadlocks on roll sink rotate with failing subsink
+
+commit a856427362c0b9b338590669a52c42777584090c
+Author: Chetan Sarva <chetan@evidon.com>
+Date:   Tue Jun 28 14:28:28 2011 -0700
+
+    FLUME-683: Add input/output buffering to ThriftEventSource/Sink
+
+commit 1f03fa1c6757b0825f483c7a62d43515e71e0c80
+Author: Chetan Sarva <chetan@evidon.com>
+Date:   Tue Jun 28 14:20:59 2011 -0700
+
+    FLUME-682: Improve SeqfileEventSink performance
+
+commit 62ea1e981ff33670b78fb961c6873fdaac987ecd
+Author: Alex Baranau <baranau.a@gmail.com>
+Date:   Wed Jun 22 15:46:26 2011 +0300
+
+    FLUME-676: Allow EL values in value() decorator
+
+commit 30c9b94a949154c6f43717d4cbdfb6cfb69582fe
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Jun 22 21:25:22 2011 -0700
+
+    FLUME-677: Update build instructions in devnotes
+
+commit 5d7acae4228f59b2760f58d7023edea028fb27a6
+Author: Jonathan Hsieh <jon@cloudera.com>
+Date:   Wed Jun 15 00:43:06 2011 -0700
+
+    FLUME-620: Collector fails due to an infinite loop during file-rolling if the body size is greater than 30kb
+    - Added option for Thrift event body truncation
+    - Added option for Avro event body truncation
+
+commit 180fe2aa5b844d01bf39d2477d61d156e247de9a
+Author: Chad Metcalf <chad@cloudera.com>
+Date:   Fri Jun 25 23:25:56 2010 -0700
+
+    CLOUDERA-BUILD. Consolidated 0.9.3 CLOUDERA-BUILD patches
+    - In preparation for cdh3u1

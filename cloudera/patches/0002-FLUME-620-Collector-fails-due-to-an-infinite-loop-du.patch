@@ -1,0 +1,1567 @@
+From 5d7acae4228f59b2760f58d7023edea028fb27a6 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Wed, 15 Jun 2011 00:43:06 -0700
+Subject: [PATCH 02/65] FLUME-620: Collector fails due to an infinite loop during file-rolling if the body size is greater than 30kb
+ - Added option for Thrift event body truncation
+ - Added option for Avro event body truncation
+
+---
+ .../flume/handlers/avro/AvroEventAdaptor.java      |  181 ------------------
+ .../flume/handlers/avro/AvroEventConvertUtil.java  |  155 +++++++++++++++
+ .../flume/handlers/avro/AvroEventSink.java         |    2 +-
+ .../flume/handlers/avro/AvroEventSource.java       |   30 ++--
+ .../thrift/PrioritizedThriftEventSource.java       |    2 +-
+ .../flume/handlers/thrift/ThriftEventAdaptor.java  |  200 --------------------
+ .../handlers/thrift/ThriftEventConvertUtil.java    |  164 ++++++++++++++++
+ .../flume/handlers/thrift/ThriftEventSink.java     |    2 +-
+ .../flume/handlers/thrift/ThriftEventSource.java   |   28 +++-
+ .../thrift/ThriftFlumeEventServerImpl.java         |    6 +-
+ .../handlers/avro/TestAvroEventConvertUtil.java    |  115 +++++++++++
+ .../flume/handlers/avro/TestAvroSinks.java         |   84 ++++++++
+ .../handlers/thrift/TestThriftEventAdaptor.java    |   75 --------
+ .../thrift/TestThriftEventConvertUtil.java         |  105 ++++++++++
+ .../flume/handlers/thrift/TestThriftSinks.java     |   71 +++++++
+ .../log4j/appender/FlumeLog4jAvroAppender.java     |    4 +-
+ 16 files changed, 743 insertions(+), 481 deletions(-)
+ delete mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventAdaptor.java
+ create mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
+ delete mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventAdaptor.java
+ create mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
+ create mode 100644 flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
+ delete mode 100644 flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventAdaptor.java
+ create mode 100644 flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventAdaptor.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventAdaptor.java
+deleted file mode 100644
+index 8483c9f..0000000
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventAdaptor.java
++++ /dev/null
+@@ -1,181 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.handlers.avro;
+-
+-import java.nio.ByteBuffer;
+-import java.util.Collections;
+-import java.util.Date;
+-import java.util.HashMap;
+-import java.util.Map;
+-import org.apache.commons.lang.NotImplementedException;
+-import org.apache.commons.lang.StringEscapeUtils;
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventImpl;
+-import com.google.common.base.Preconditions;
+-
+-/**
+- * This wraps a Avro generated AvroFlumeEvent with a Flume Event interface.
+- */
+-public class AvroEventAdaptor extends Event {
+-  AvroFlumeEvent evt = null;
+-
+-  AvroEventAdaptor(AvroFlumeEvent evt) {
+-    super();
+-    this.evt = evt;
+-  }
+-
+-  @Override
+-  public byte[] getBody() {
+-    return evt.body.array();
+-  }
+-
+-  @Override
+-  public Priority getPriority() {
+-    return convert(evt.priority);
+-  }
+-
+-  @Override
+-  public long getTimestamp() {
+-    return evt.timestamp;
+-  }
+-
+-  public static Priority convert(com.cloudera.flume.handlers.avro.Priority p) {
+-    Preconditions.checkNotNull(p, "Priority argument must be valid.");
+-    switch (p) {
+-    case FATAL:
+-      return Priority.FATAL;
+-    case ERROR:
+-      return Priority.ERROR;
+-    case WARN:
+-      return Priority.WARN;
+-    case INFO:
+-      return Priority.INFO;
+-    case DEBUG:
+-      return Priority.DEBUG;
+-    case TRACE:
+-      return Priority.TRACE;
+-    default:
+-      throw new IllegalStateException("Unknown value " + p);
+-    }
+-  }
+-
+-  public static com.cloudera.flume.handlers.avro.Priority convert(Priority p) {
+-    Preconditions.checkNotNull(p, "Argument must not be null.");
+-    switch (p) {
+-    case FATAL:
+-      return com.cloudera.flume.handlers.avro.Priority.FATAL;
+-    case ERROR:
+-      return com.cloudera.flume.handlers.avro.Priority.ERROR;
+-    case WARN:
+-      return com.cloudera.flume.handlers.avro.Priority.WARN;
+-    case INFO:
+-      return com.cloudera.flume.handlers.avro.Priority.INFO;
+-    case DEBUG:
+-      return com.cloudera.flume.handlers.avro.Priority.DEBUG;
+-    case TRACE:
+-      return com.cloudera.flume.handlers.avro.Priority.TRACE;
+-    default:
+-      throw new IllegalStateException("Unknown value " + p);
+-    }
+-  }
+-
+-  @Override
+-  public String toString() {
+-    String mbody = StringEscapeUtils.escapeJava(new String(getBody()));
+-    return "[" + getPriority().toString() + " " + new Date(getTimestamp())
+-        + "] " + mbody;
+-  }
+-
+-  @Override
+-  public long getNanos() {
+-    return evt.nanos;
+-  }
+-
+-  @Override
+-  public String getHost() {
+-    return evt.host.toString();
+-  }
+-
+-  public static AvroFlumeEvent convert(Event e) {
+-    AvroFlumeEvent tempAvroEvt = new AvroFlumeEvent();
+-
+-    tempAvroEvt.timestamp = e.getTimestamp();
+-    tempAvroEvt.priority = convert(e.getPriority());
+-    ByteBuffer bbuf = ByteBuffer.wrap(e.getBody());
+-
+-    tempAvroEvt.body = bbuf;
+-    tempAvroEvt.nanos = e.getNanos();
+-    tempAvroEvt.host = e.getHost();
+-
+-    tempAvroEvt.fields = new HashMap<CharSequence, ByteBuffer>();
+-    for (String s : e.getAttrs().keySet()) {
+-      // wrap a ByteBuffer around e.getAttrs().get(s)
+-      // also note that e.getAttrs().get(s) is immutable
+-      ByteBuffer temp = ByteBuffer.wrap(e.getAttrs().get(s));
+-      tempAvroEvt.fields.put(s, temp);
+-    }
+-    return tempAvroEvt;
+-  }
+-
+-  /**
+-   * This returns the FlumeEvent corresponding to the AvroEvent passed in the
+-   * constructor of this object.
+-   */
+-  public Event toFlumeEvent() {
+-    Preconditions.checkNotNull(evt, "AvroFlumeEvent is not initialized");
+-    return new EventImpl(this.getBody(), this.getTimestamp(), this
+-        .getPriority(), this.getNanos(), this.getHost(), this.getAttrs());
+-  }
+-
+-  @Override
+-  public byte[] get(String attr) {
+-    return evt.fields.get(attr).array();
+-  }
+-
+-  @Override
+-  public Map<String, byte[]> getAttrs() {
+-    if (evt.fields == null) {
+-      return Collections.<String, byte[]> emptyMap();
+-    }
+-    HashMap<String, byte[]> tempMap = new HashMap<String, byte[]>();
+-    for (CharSequence u : evt.fields.keySet()) {
+-      tempMap.put(u.toString(), evt.fields.get(u).array());
+-    }
+-    return tempMap;
+-  }
+-
+-  @Override
+-  public void set(String attr, byte[] value) {
+-    if (evt.fields.get(attr) != null) {
+-      throw new IllegalArgumentException(
+-          "Event already had an event with attribute " + attr);
+-    }
+-    ByteBuffer bbuf = ByteBuffer.wrap(value);
+-    evt.fields.put(attr, bbuf);
+-  }
+-
+-  @Override
+-  public void hierarchicalMerge(String prefix, Event e) {
+-    throw new NotImplementedException();
+-  }
+-
+-  @Override
+-  public void merge(Event e) {
+-    throw new NotImplementedException();
+-  }
+-}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
+new file mode 100644
+index 0000000..2079189
+--- /dev/null
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
+@@ -0,0 +1,155 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.avro;
++
++import java.nio.ByteBuffer;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.Map;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventImpl;
++import com.google.common.base.Preconditions;
++
++/**
++ * This utility class contains methods that convert Avro-generated
++ * AvroFlumeEvents into an FlumeEvents and vice versa.
++ */
++public class AvroEventConvertUtil {
++
++  private AvroEventConvertUtil() {
++  }
++
++  public static final Logger LOG = LoggerFactory
++      .getLogger(AvroEventConvertUtil.class);
++
++  public static Event toFlumeEvent(AvroFlumeEvent evt) {
++    return toFlumeEvent(evt, false);
++  }
++
++  public static Event toFlumeEvent(AvroFlumeEvent evt, boolean truncates) {
++    Preconditions.checkArgument(evt != null, "AvorFlumeEvent is null!");
++
++    byte[] body = convertBody(evt.body, truncates);
++    com.cloudera.flume.handlers.avro.Priority p = evt.priority;
++    p = (p == null) ? com.cloudera.flume.handlers.avro.Priority.INFO : p;
++    String host = (evt.host == null) ? "" : evt.host.toString();
++    Map<String, byte[]> attrs = getAttrs(evt.fields);
++    return new EventImpl(body, evt.timestamp, toFlumePriority(p), evt.nanos,
++        host, attrs);
++  }
++
++  private static byte[] convertBody(ByteBuffer buf, boolean truncates) {
++    if (buf == null) {
++      LOG.warn("Avro Event had null body! returning empty body");
++      return new byte[0];
++    }
++    byte[] bytes = buf.array();
++    int maxSz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    if (bytes.length > maxSz) {
++      Preconditions.checkArgument(truncates,
++          "Unexpected too long Avro Event body: max is " + maxSz
++              + " but body was buf.length");
++      byte[] trunc = Arrays.copyOf(bytes, maxSz);
++      return trunc;
++    }
++    // normal case
++    return bytes;
++  }
++
++  private static com.cloudera.flume.core.Event.Priority toFlumePriority(
++      com.cloudera.flume.handlers.avro.Priority p) {
++    Preconditions.checkNotNull(p, "Priority argument must be valid.");
++    switch (p) {
++    case FATAL:
++      return com.cloudera.flume.core.Event.Priority.FATAL;
++    case ERROR:
++      return com.cloudera.flume.core.Event.Priority.ERROR;
++    case WARN:
++      return com.cloudera.flume.core.Event.Priority.WARN;
++    case INFO:
++      return com.cloudera.flume.core.Event.Priority.INFO;
++    case DEBUG:
++      return com.cloudera.flume.core.Event.Priority.DEBUG;
++    case TRACE:
++      return com.cloudera.flume.core.Event.Priority.TRACE;
++    default:
++      throw new IllegalStateException("Unknown value " + p);
++    }
++  }
++
++  private static com.cloudera.flume.handlers.avro.Priority toAvroPriority(
++      com.cloudera.flume.core.Event.Priority p) {
++    Preconditions.checkNotNull(p, "Argument must not be null.");
++    switch (p) {
++    case FATAL:
++      return com.cloudera.flume.handlers.avro.Priority.FATAL;
++    case ERROR:
++      return com.cloudera.flume.handlers.avro.Priority.ERROR;
++    case WARN:
++      return com.cloudera.flume.handlers.avro.Priority.WARN;
++    case INFO:
++      return com.cloudera.flume.handlers.avro.Priority.INFO;
++    case DEBUG:
++      return com.cloudera.flume.handlers.avro.Priority.DEBUG;
++    case TRACE:
++      return com.cloudera.flume.handlers.avro.Priority.TRACE;
++    default:
++      throw new IllegalStateException("Unknown value " + p);
++    }
++  }
++
++  public static AvroFlumeEvent toAvroEvent(Event e) {
++    AvroFlumeEvent tempAvroEvt = new AvroFlumeEvent();
++
++    tempAvroEvt.timestamp = e.getTimestamp();
++    tempAvroEvt.priority = toAvroPriority(e.getPriority());
++    ByteBuffer bbuf = ByteBuffer.wrap(e.getBody());
++
++    tempAvroEvt.body = bbuf;
++    tempAvroEvt.nanos = e.getNanos();
++    tempAvroEvt.host = e.getHost();
++
++    tempAvroEvt.fields = new HashMap<CharSequence, ByteBuffer>();
++    for (String s : e.getAttrs().keySet()) {
++      // wrap a ByteBuffer around e.getAttrs().get(s)
++      // also note that e.getAttrs().get(s) is immutable
++      ByteBuffer temp = ByteBuffer.wrap(e.getAttrs().get(s));
++      tempAvroEvt.fields.put(s, temp);
++    }
++    return tempAvroEvt;
++  }
++
++  private static Map<String, byte[]> getAttrs(
++      Map<CharSequence, ByteBuffer> fields) {
++    if (fields == null) {
++      return Collections.<String, byte[]> emptyMap();
++    }
++    HashMap<String, byte[]> tempMap = new HashMap<String, byte[]>();
++    for (CharSequence u : fields.keySet()) {
++      tempMap.put(u.toString(), fields.get(u).array());
++    }
++    return tempMap;
++  }
++
++}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+index e5e5dc2..7d260f8 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+@@ -69,7 +69,7 @@ public class AvroEventSink extends EventSink.Base {
+   @Override
+   public void append(Event e) throws IOException, InterruptedException {
+     // convert the flumeEvent to AvroEevent
+-    AvroFlumeEvent afe = AvroEventAdaptor.convert(e);
++    AvroFlumeEvent afe = AvroEventConvertUtil.toAvroEvent(e);
+     // Make sure client side is initialized.
+     this.ensureInitialized();
+     try {
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSource.java
+index 6e80da8..61fc217 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSource.java
+@@ -54,6 +54,7 @@ public class AvroEventSource extends EventSource.Base {
+ 
+   static final Logger LOG = LoggerFactory.getLogger(AvroEventSource.class);
+ 
++  public static final String C_TRUNCATE = "truncate";
+   public static final String A_SERVERPORT = "serverPort";
+   public static final String A_QUEUE_CAPACITY = "queueCapacity";
+   public static final String A_QUEUE_FREE = "queueFree";
+@@ -68,16 +69,17 @@ public class AvroEventSource extends EventSource.Base {
+   final AtomicLong enqueued = new AtomicLong();
+   final AtomicLong dequeued = new AtomicLong();
+   final AtomicLong bytesIn = new AtomicLong();
+-
++  final boolean shouldTruncate;
+   boolean closed = true;
+ 
+   /**
+    * Create a Avro event source listening on port with a qsize buffer.
+    */
+-  public AvroEventSource(int port, int qsize) {
++  public AvroEventSource(int port, int qsize, boolean truncates) {
+     this.port = port;
+     this.svr = new FlumeEventAvroServerImpl(port);
+     this.q = new LinkedBlockingQueue<Event>(qsize);
++    this.shouldTruncate = truncates;
+   }
+ 
+   /**
+@@ -98,14 +100,15 @@ public class AvroEventSource extends EventSource.Base {
+   /**
+    * This constructor allows the for an arbitrary blocking queue implementation.
+    */
+-  public AvroEventSource(int port, BlockingQueue<Event> q) {
++  public AvroEventSource(int port, BlockingQueue<Event> q, boolean truncates) {
+     Preconditions.checkNotNull(q);
+     this.port = port;
+     this.q = q;
++    this.shouldTruncate = truncates;
+   }
+ 
+   public AvroEventSource(int port) {
+-    this(port, DEFAULT_QUEUE_SIZE);
++    this(port, DEFAULT_QUEUE_SIZE, false);
+   }
+ 
+   /**
+@@ -132,9 +135,9 @@ public class AvroEventSource extends EventSource.Base {
+       @Override
+       public void append(AvroFlumeEvent evt) {
+         // convert AvroEvent evt -> e
+-        AvroEventAdaptor adapt = new AvroEventAdaptor(evt);
++        Event e = AvroEventConvertUtil.toFlumeEvent(evt, shouldTruncate);
+         try {
+-          enqueue(adapt.toFlumeEvent());
++          enqueue(e);
+         } catch (IOException e1) {
+           e1.printStackTrace();
+         }
+@@ -166,9 +169,8 @@ public class AvroEventSource extends EventSource.Base {
+       if (Clock.unixTime() - start > maxSleep) {
+         if (sz == q.size()) {
+           // no progress made, timeout and close it.
+-          LOG
+-              .warn("Close timed out due to no progress.  Closing despite having "
+-                  + q.size() + " values still enqueued");
++          LOG.warn("Close timed out due to no progress.  Closing despite having "
++              + q.size() + " values still enqueued");
+           return;
+         }
+         // there was some progress, go another cycle.
+@@ -221,10 +223,14 @@ public class AvroEventSource extends EventSource.Base {
+     return new SourceBuilder() {
+       @Override
+       public EventSource build(Context ctx, String... argv) {
+-        Preconditions
+-            .checkArgument(argv.length == 1, "usage: avroSource(port)");
++        Preconditions.checkArgument(argv.length == 1,
++            "usage: avroSource(port{," + C_TRUNCATE + "=false})");
+         int port = Integer.parseInt(argv[0]);
+-        return new AvroEventSource(port);
++
++        String val = ctx.getObj(C_TRUNCATE, String.class);
++        boolean truncates = (val == null) ? false : Boolean.parseBoolean(val);
++
++        return new AvroEventSource(port, DEFAULT_QUEUE_SIZE, truncates);
+       }
+     };
+   }
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/PrioritizedThriftEventSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/PrioritizedThriftEventSource.java
+index f9d8b34..90fed7e 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/PrioritizedThriftEventSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/PrioritizedThriftEventSource.java
+@@ -123,7 +123,7 @@ public class PrioritizedThriftEventSource extends EventSource.Base {
+               q.add(e);
+               super.append(e);
+             }
+-          }));
++          }, false));
+       Factory protFactory = new TBinaryProtocol.Factory(true, true);
+ 
+       TSaneServerSocket serverTransport = new TSaneServerSocket(port);
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventAdaptor.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventAdaptor.java
+deleted file mode 100644
+index 346a2a9..0000000
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventAdaptor.java
++++ /dev/null
+@@ -1,200 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.handlers.thrift;
+-
+-import java.nio.ByteBuffer;
+-import java.util.Collections;
+-import java.util.Date;
+-import java.util.HashMap;
+-import java.util.Map;
+-
+-import org.apache.commons.lang.NotImplementedException;
+-import org.apache.commons.lang.StringEscapeUtils;
+-import org.slf4j.Logger;
+-import org.slf4j.LoggerFactory;
+-
+-import com.cloudera.flume.core.Event;
+-import com.google.common.base.Preconditions;
+-
+-/**
+- * This wraps a Thrift generated ThriftFlumeEvent with a Flume Event interface.
+- * 
+- * This should only be used by the ThriftEventSink, ThriftEventSource, and
+- * ThriftFlumeEventServerImpl. Its constructor, and static conversion function
+- * are purposely package protected.
+- */
+-class ThriftEventAdaptor extends Event {
+-  public static final Logger LOG = LoggerFactory
+-      .getLogger(ThriftEventAdaptor.class);
+-  ThriftFlumeEvent evt;
+-
+-  ThriftEventAdaptor(ThriftFlumeEvent evt) {
+-    super();
+-    Preconditions.checkArgument(evt != null, "ThriftFlumeEvent is null!");
+-    this.evt = evt;
+-  }
+-
+-  @Override
+-  public byte[] getBody() {
+-    byte[] buf = evt.getBody();
+-    if (buf == null) {
+-      LOG.warn("Thrift Event had null body! " + evt);
+-      return new byte[0];
+-    }
+-    return buf;
+-  }
+-
+-  @Override
+-  public Priority getPriority() {
+-    return convert(evt.getPriority());
+-  }
+-
+-  @Override
+-  public long getTimestamp() {
+-    return evt.timestamp;
+-  }
+-
+-  public static Priority convert(com.cloudera.flume.handlers.thrift.Priority p) {
+-    Preconditions.checkNotNull(p, "Priority argument must be valid.");
+-
+-    switch (p) {
+-    case FATAL:
+-      return Priority.FATAL;
+-    case ERROR:
+-      return Priority.ERROR;
+-    case WARN:
+-      return Priority.WARN;
+-    case INFO:
+-      return Priority.INFO;
+-    case DEBUG:
+-      return Priority.DEBUG;
+-    case TRACE:
+-      return Priority.TRACE;
+-    default:
+-      throw new IllegalStateException("Unknown value " + p);
+-    }
+-  }
+-
+-  public static com.cloudera.flume.handlers.thrift.Priority convert(Priority p) {
+-    Preconditions.checkNotNull(p, "Argument must not be null.");
+-
+-    switch (p) {
+-    case FATAL:
+-      return com.cloudera.flume.handlers.thrift.Priority.FATAL;
+-    case ERROR:
+-      return com.cloudera.flume.handlers.thrift.Priority.ERROR;
+-    case WARN:
+-      return com.cloudera.flume.handlers.thrift.Priority.WARN;
+-    case INFO:
+-      return com.cloudera.flume.handlers.thrift.Priority.INFO;
+-    case DEBUG:
+-      return com.cloudera.flume.handlers.thrift.Priority.DEBUG;
+-    case TRACE:
+-      return com.cloudera.flume.handlers.thrift.Priority.TRACE;
+-    default:
+-      throw new IllegalStateException("Unknown value " + p);
+-    }
+-  }
+-
+-  @Override
+-  public String toString() {
+-    String mbody = StringEscapeUtils.escapeJava(new String(getBody()));
+-    return "[" + getPriority().toString() + " " + new Date(getTimestamp())
+-        + "] " + mbody;
+-  }
+-
+-  @Override
+-  public long getNanos() {
+-    return evt.getNanos();
+-  }
+-
+-  @Override
+-  public String getHost() {
+-    return evt.getHost();
+-  }
+-
+-  /**
+-   * This makes a thrift compatible copy of the event. It is here to encapsulate
+-   * future changes to the Event/ThriftFlumeEvent interface
+-   */
+-  public static ThriftFlumeEvent convert(Event e) {
+-    ThriftFlumeEvent evt = new ThriftFlumeEvent();
+-    evt.timestamp = e.getTimestamp();
+-    evt.priority = convert(e.getPriority());
+-    ByteBuffer buf = ByteBuffer.wrap(e.getBody());
+-    evt.body = buf;
+-    evt.nanos = e.getNanos();
+-    evt.host = e.getHost();
+-
+-    Map<String, byte[]> tempMap = e.getAttrs();
+-    Map<String, ByteBuffer> returnMap = new HashMap<String, ByteBuffer>();
+-    for (String key : tempMap.keySet()) {
+-      buf.clear();
+-      buf = ByteBuffer.wrap(tempMap.get(key));
+-      returnMap.put(key, buf);
+-    }
+-
+-    evt.fields = returnMap;
+-    return evt;
+-  }
+-
+-  @Override
+-  public byte[] get(String attr) {
+-    Preconditions.checkNotNull(evt.fields, "Event contains no attributes");
+-
+-    if (evt.fields.get(attr) == null) {
+-      return null;
+-    }
+-
+-    return evt.fields.get(attr).array();
+-  }
+-
+-  @Override
+-  public Map<String, byte[]> getAttrs() {
+-    if (evt.fields == null) {
+-      return Collections.<String, byte[]> emptyMap();
+-    }
+-    Map<String, ByteBuffer> tempMap = Collections.unmodifiableMap(evt.fields);
+-    Map<String, byte[]> returnMap = new HashMap<String, byte[]>();
+-    for (String key : tempMap.keySet()) {
+-      ByteBuffer buf = tempMap.get(key);
+-      returnMap.put(key, buf.array());
+-    }
+-    return Collections.unmodifiableMap(returnMap);
+-  }
+-
+-  @Override
+-  public void set(String attr, byte[] vArray) {
+-    if (evt.fields.get(attr) != null) {
+-      throw new IllegalArgumentException(
+-          "Event already had an event with attribute " + attr);
+-    }
+-    evt.fields.put(attr, ByteBuffer.wrap(vArray));
+-  }
+-
+-  @Override
+-  public void hierarchicalMerge(String prefix, Event e) {
+-    throw new NotImplementedException();
+-  }
+-
+-  @Override
+-  public void merge(Event e) {
+-    throw new NotImplementedException();
+-  }
+-
+-}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
+new file mode 100644
+index 0000000..c9537a8
+--- /dev/null
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
+@@ -0,0 +1,164 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.thrift;
++
++import java.nio.ByteBuffer;
++import java.util.Arrays;
++import java.util.Collections;
++import java.util.HashMap;
++import java.util.Map;
++
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.Event.Priority;
++import com.cloudera.flume.core.EventImpl;
++import com.google.common.base.Preconditions;
++
++/**
++ * This converts a Thrift generated ThriftFlumeEvent in to a FlumeEvent.
++ * 
++ * This should only be used by the ThriftEventSink, ThriftEventSource, and
++ * ThriftFlumeEventServerImpl. Its constructor, and static conversion function
++ * are purposely package protected.
++ */
++class ThriftEventConvertUtil {
++  public static final Logger LOG = LoggerFactory
++      .getLogger(ThriftEventConvertUtil.class);
++
++  private ThriftEventConvertUtil() {
++  }
++
++  public static Event toFlumeEvent(ThriftFlumeEvent evt) {
++    return toFlumeEvent(evt, false);
++  }
++
++  public static Event toFlumeEvent(ThriftFlumeEvent evt, boolean truncates) {
++    Preconditions.checkArgument(evt != null, "ThriftFlumeEvent is null!");
++
++    byte[] body = convertBody(evt.getBody(), truncates);
++    com.cloudera.flume.handlers.thrift.Priority p = evt.getPriority();
++    p = (p == null) ? com.cloudera.flume.handlers.thrift.Priority.INFO : p;
++    Map<String, byte[]> attrs = getAttrs(evt);
++    return new EventImpl(body, evt.getTimestamp(), toFlumePriority(p),
++        evt.getNanos(), evt.getHost(), attrs);
++  }
++
++  private static byte[] convertBody(byte[] buf, boolean truncates) {
++    if (buf == null) {
++      LOG.warn("Thrift Event had null body! returning empty body");
++      return new byte[0];
++    }
++
++    int maxSz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    if (buf.length > maxSz) {
++      Preconditions.checkArgument(truncates,
++          "Unexpected too long Thrift Event body: max is " + maxSz
++              + " but body was buf.length");
++      byte[] trunc = Arrays.copyOf(buf, maxSz);
++      return trunc;
++    }
++    // normal case
++    return buf;
++  }
++
++  private static com.cloudera.flume.core.Event.Priority toFlumePriority(
++      com.cloudera.flume.handlers.thrift.Priority p) {
++    Preconditions.checkNotNull(p, "Priority argument must be valid.");
++
++    switch (p) {
++    case FATAL:
++      return Priority.FATAL;
++    case ERROR:
++      return Priority.ERROR;
++    case WARN:
++      return Priority.WARN;
++    case INFO:
++      return Priority.INFO;
++    case DEBUG:
++      return Priority.DEBUG;
++    case TRACE:
++      return Priority.TRACE;
++    default:
++      throw new IllegalStateException("Unknown value " + p);
++    }
++  }
++
++  private static com.cloudera.flume.handlers.thrift.Priority toThriftPriority(
++      com.cloudera.flume.core.Event.Priority p) {
++    Preconditions.checkNotNull(p, "Argument must not be null.");
++
++    switch (p) {
++    case FATAL:
++      return com.cloudera.flume.handlers.thrift.Priority.FATAL;
++    case ERROR:
++      return com.cloudera.flume.handlers.thrift.Priority.ERROR;
++    case WARN:
++      return com.cloudera.flume.handlers.thrift.Priority.WARN;
++    case INFO:
++      return com.cloudera.flume.handlers.thrift.Priority.INFO;
++    case DEBUG:
++      return com.cloudera.flume.handlers.thrift.Priority.DEBUG;
++    case TRACE:
++      return com.cloudera.flume.handlers.thrift.Priority.TRACE;
++    default:
++      throw new IllegalStateException("Unknown value " + p);
++    }
++  }
++
++  /**
++   * This makes a thrift compatible copy of the event. It is here to encapsulate
++   * future changes to the Event/ThriftFlumeEvent interface
++   */
++  public static ThriftFlumeEvent toThriftEvent(Event e) {
++    ThriftFlumeEvent evt = new ThriftFlumeEvent();
++    evt.timestamp = e.getTimestamp();
++    evt.priority = toThriftPriority(e.getPriority());
++    ByteBuffer buf = ByteBuffer.wrap(e.getBody());
++    evt.body = buf;
++    evt.nanos = e.getNanos();
++    evt.host = e.getHost();
++
++    Map<String, byte[]> tempMap = e.getAttrs();
++    Map<String, ByteBuffer> returnMap = new HashMap<String, ByteBuffer>();
++    for (String key : tempMap.keySet()) {
++      buf.clear();
++      buf = ByteBuffer.wrap(tempMap.get(key));
++      returnMap.put(key, buf);
++    }
++
++    evt.fields = returnMap;
++    return evt;
++  }
++
++  private static Map<String, byte[]> getAttrs(ThriftFlumeEvent evt) {
++    if (evt.fields == null) {
++      return Collections.<String, byte[]> emptyMap();
++    }
++    Map<String, ByteBuffer> tempMap = Collections.unmodifiableMap(evt.fields);
++    Map<String, byte[]> returnMap = new HashMap<String, byte[]>();
++    for (String key : tempMap.keySet()) {
++      ByteBuffer buf = tempMap.get(key);
++      returnMap.put(key, buf.array());
++    }
++    return Collections.unmodifiableMap(returnMap);
++  }
++
++}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+index 7f062db..d4937f1 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+@@ -71,7 +71,7 @@ public class ThriftEventSink extends EventSink.Base {
+ 
+   @Override
+   public void append(Event e) throws IOException, InterruptedException {
+-    ThriftFlumeEvent tfe = ThriftEventAdaptor.convert(e);
++    ThriftFlumeEvent tfe = ThriftEventConvertUtil.toThriftEvent(e);
+     try {
+       client.append(tfe);
+       sentBytes.set(stats.getBytesWritten());
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSource.java
+index e9223ed..7bedf75 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSource.java
+@@ -54,6 +54,7 @@ public class ThriftEventSource extends EventSource.Base {
+ 
+   static final Logger LOG = LoggerFactory.getLogger(ThriftEventSource.class);
+ 
++  public static final String C_TRUNCATE = "truncate";
+   public static final String A_SERVERPORT = "serverPort";
+   public static final String A_QUEUE_CAPACITY = "queueCapacity";
+   public static final String A_QUEUE_FREE = "queueFree";
+@@ -69,16 +70,18 @@ public class ThriftEventSource extends EventSource.Base {
+   final AtomicLong enqueued = new AtomicLong();
+   final AtomicLong dequeued = new AtomicLong();
+   final AtomicLong bytesIn = new AtomicLong();
++  final boolean shouldTruncate;
+ 
+   boolean closed = true;
+ 
+   /**
+    * Create a thrift event source listening on port with a qsize buffer.
+    */
+-  public ThriftEventSource(int port, int qsize) {
++  public ThriftEventSource(int port, int qsize, boolean truncated) {
+     this.port = port;
+     this.svr = new ThriftFlumeEventServer();
+     this.q = new LinkedBlockingQueue<Event>(qsize);
++    this.shouldTruncate = truncated;
+   }
+ 
+   /**
+@@ -100,15 +103,16 @@ public class ThriftEventSource extends EventSource.Base {
+   /**
+    * This constructor allows the for an arbitrary blocking queue implementation.
+    */
+-  public ThriftEventSource(int port, BlockingQueue<Event> q) {
++  public ThriftEventSource(int port, BlockingQueue<Event> q, boolean truncated) {
+     Preconditions.checkNotNull(q);
+     this.port = port;
+     this.svr = new ThriftFlumeEventServer();
+     this.q = q;
++    this.shouldTruncate = truncated;
+   }
+ 
+   public ThriftEventSource(int port) {
+-    this(port, DEFAULT_QUEUE_SIZE);
++    this(port, DEFAULT_QUEUE_SIZE, false);
+   }
+ 
+   /**
+@@ -135,7 +139,7 @@ public class ThriftEventSource extends EventSource.Base {
+               enqueue(e);
+               super.append(e);
+             }
+-          }));
++          }, shouldTruncate));
+       Factory protFactory = new TBinaryProtocol.Factory(true, true);
+ 
+       TSaneServerSocket serverTransport = new TSaneServerSocket(port);
+@@ -225,13 +229,25 @@ public class ThriftEventSource extends EventSource.Base {
+       @Override
+       public EventSource build(Context ctx, String... argv) {
+         Preconditions.checkArgument(argv.length == 1,
+-            "usage: thriftSource(port)");
++            "usage: thriftSource(port{, " + C_TRUNCATE + "=false)");
+ 
+         int port = Integer.parseInt(argv[0]);
+ 
+-        return new ThriftEventSource(port);
++        String val = ctx.getObj(C_TRUNCATE, String.class);
++        boolean truncates = (val == null) ? false : Boolean.parseBoolean(val);
++
++        return new ThriftEventSource(port, DEFAULT_QUEUE_SIZE, truncates);
+       }
+ 
+     };
+   }
++
++  /**
++   * Exposed for testing
++   * 
++   * @return
++   */
++  ThriftFlumeEventServer getServer() {
++    return svr;
++  }
+ }
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftFlumeEventServerImpl.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftFlumeEventServerImpl.java
+index 09759d7..479acc1 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftFlumeEventServerImpl.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftFlumeEventServerImpl.java
+@@ -32,9 +32,11 @@ class ThriftFlumeEventServerImpl implements Iface {
+   private static final Logger LOG = LoggerFactory
+       .getLogger(ThriftFlumeEventServerImpl.class);
+   EventSink sink;
++  boolean truncates;
+ 
+-  ThriftFlumeEventServerImpl(EventSink sink) {
++  ThriftFlumeEventServerImpl(EventSink sink, boolean truncates) {
+     this.sink = sink;
++    this.truncates = truncates;
+   }
+ 
+   @Override
+@@ -42,7 +44,7 @@ class ThriftFlumeEventServerImpl implements Iface {
+     Preconditions.checkState(sink != null);
+     Preconditions.checkNotNull(evt);
+     try {
+-      sink.append(new ThriftEventAdaptor(evt));
++      sink.append(ThriftEventConvertUtil.toFlumeEvent(evt, truncates));
+     } catch (IOException e) {
+       e.printStackTrace();
+       throw new TException("Caught IO exception " + e);
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
+new file mode 100644
+index 0000000..8245395
+--- /dev/null
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
+@@ -0,0 +1,115 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.avro;
++
++import java.nio.ByteBuffer;
++import java.util.Arrays;
++import java.util.HashMap;
++import java.util.Map.Entry;
++
++import org.junit.Assert;
++import org.junit.Before;
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventImpl;
++
++public class TestAvroEventConvertUtil {
++
++  private Event testEvent;
++
++  @Before
++  public void setUp() {
++    testEvent = new EventImpl();
++
++    testEvent.set("one", "one".getBytes());
++    testEvent.set("two", "two".getBytes());
++  }
++
++  @Test
++  public void testConvert() {
++    AvroFlumeEvent thriftEvent = AvroEventConvertUtil.toAvroEvent(testEvent);
++
++    Assert.assertNotNull(thriftEvent);
++    Assert.assertNotNull(thriftEvent.host);
++    Assert.assertNotNull(thriftEvent.timestamp);
++    Assert.assertNotNull(thriftEvent.fields);
++    Assert.assertNotNull(thriftEvent.priority);
++
++    for (Entry<String, byte[]> entry : testEvent.getAttrs().entrySet()) {
++      Assert.assertTrue(thriftEvent.fields.containsKey(entry.getKey()));
++      Assert.assertTrue(Arrays.equals(thriftEvent.fields.get(entry.getKey())
++          .array(), entry.getValue()));
++    }
++  }
++
++  @Test
++  public void testInvalidAttribute() {
++    AvroFlumeEvent thriftEvent = AvroEventConvertUtil.toAvroEvent(testEvent);
++
++    Assert.assertNotNull(thriftEvent);
++    Assert.assertNull(AvroEventConvertUtil.toFlumeEvent(thriftEvent).get(
++        "i do not exist"));
++  }
++
++  @Test
++  public void testNullBody() {
++    AvroFlumeEvent tEvt = new AvroFlumeEvent(); // null body
++    Assert.assertEquals(null, tEvt.body);
++    Assert
++        .assertEquals(0, AvroEventConvertUtil.toFlumeEvent(tEvt).getBody().length);
++  }
++
++  /**
++   * This event is evil because it surpasses the max event size.
++   */
++  @Test(expected = RuntimeException.class)
++  public void testEvilEvent() {
++    long maxSize = FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer toobig = ByteBuffer.allocate((int) (maxSize * 2));
++    AvroFlumeEvent tevt = new AvroFlumeEvent();
++    tevt.timestamp = 0L;
++    tevt.priority = Priority.INFO;
++    tevt.body = toobig;
++    tevt.nanos = 0L;
++    tevt.host = "localhost";
++    tevt.fields = new HashMap<CharSequence, ByteBuffer>();
++    Event e = AvroEventConvertUtil.toFlumeEvent(tevt);
++    EventImpl.select(e);
++  }
++
++  /**
++   * This event is evil because it surpasses the max event size.
++   */
++  @Test
++  public void testTruncEvilEvent() {
++    long maxSize = FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer toobig = ByteBuffer.allocate((int) (maxSize * 2));
++    AvroFlumeEvent tevt = new AvroFlumeEvent();
++    tevt.timestamp = 0L;
++    tevt.priority = Priority.INFO;
++    tevt.body = toobig;
++    tevt.nanos = 0L;
++    tevt.host = "localhost";
++    tevt.fields = new HashMap<CharSequence, ByteBuffer>();
++    Event e = AvroEventConvertUtil.toFlumeEvent(tevt, true);
++    EventImpl.select(e);
++  }
++
++}
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+index 1332b4d..08c8bb4 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+@@ -19,18 +19,26 @@
+ package com.cloudera.flume.handlers.avro;
+ 
+ import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertTrue;
+ 
+ import java.io.IOException;
++import java.nio.ByteBuffer;
++import java.util.HashMap;
+ import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicLong;
+ 
+ import org.apache.log4j.Level;
+ import org.apache.log4j.Logger;
++import org.apache.thrift.TException;
+ import org.junit.Before;
+ import org.junit.Test;
+ 
+ import com.cloudera.flume.ExampleData;
++import com.cloudera.flume.conf.FlumeBuilder;
+ import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.flume.conf.LogicalNodeContext;
+ import com.cloudera.flume.core.EventImpl;
+ import com.cloudera.flume.core.EventSource;
+ import com.cloudera.flume.core.EventUtil;
+@@ -38,6 +46,7 @@ import com.cloudera.flume.handlers.debug.MemorySinkSource;
+ import com.cloudera.flume.handlers.debug.NoNlASCIISynthSource;
+ import com.cloudera.flume.reporter.ReportEvent;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
++import com.cloudera.util.Clock;
+ import com.cloudera.util.NetUtils;
+ 
+ /**
+@@ -234,4 +243,79 @@ public class TestAvroSinks implements ExampleData {
+     tes.enqueue(new EventImpl(new byte[0]));
+     tes.close();
+   }
++
++  @Test
++  public void testTruncateReject() throws FlumeSpecException, IOException,
++      InterruptedException {
++    final AvroEventSource src = (AvroEventSource) FlumeBuilder
++        .buildSource(LogicalNodeContext.testingContext(),
++            "avroSource(1234,truncate=false)");
++    int sz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer bb = ByteBuffer.allocate(sz * 2); // too big
++    final AvroFlumeEvent afe = new AvroFlumeEvent();
++    afe.timestamp = 0L;
++    afe.priority = com.cloudera.flume.handlers.avro.Priority.INFO;
++    afe.body = bb;
++    afe.nanos = 0L;
++    afe.host = "localhost";
++    afe.fields = new HashMap<CharSequence, ByteBuffer>();
++    final AvroEventSink snk = new AvroEventSink("localhost", 1234);
++    final CountDownLatch done = new CountDownLatch(1);
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          src.open();
++          snk.open();
++          snk.avroClient.append(afe); // send non-compliant ThriftFlumeEvent
++        } catch (Exception e) {
++        } finally {
++          done.countDown();
++        }
++      }
++    };
++    t.start();
++    // other thread should not block
++    assertTrue(done.await(5, TimeUnit.SECONDS));
++    src.close();
++    snk.close();
++    assertEquals(0, src.enqueued.get()); // sent event should be rejected
++  }
++
++  @Test
++  public void testTruncate() throws TException, InterruptedException,
++      FlumeSpecException, IOException {
++    final AvroEventSource src = (AvroEventSource) FlumeBuilder.buildSource(
++        LogicalNodeContext.testingContext(), "avroSource(1234,truncate=true)");
++    int sz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer bb = ByteBuffer.allocate(sz * 2); // too big
++    final AvroFlumeEvent afe = new AvroFlumeEvent();
++    afe.timestamp = 0L;
++    afe.priority = com.cloudera.flume.handlers.avro.Priority.INFO;
++    afe.body = bb;
++    afe.nanos = 0L;
++    afe.host = "localhost";
++    afe.fields = new HashMap<CharSequence, ByteBuffer>();
++    final AvroEventSink snk = new AvroEventSink("localhost", 1234);
++    final CountDownLatch done = new CountDownLatch(1);
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          src.open();
++          snk.open();
++          snk.avroClient.append(afe); // send non-compliant ThriftFlumeEvent
++        } catch (Exception e) {
++        } finally {
++          done.countDown();
++        }
++      }
++    };
++    t.start();
++    // other thread should not block
++    assertTrue(done.await(5, TimeUnit.SECONDS));
++    Clock.sleep(250); // data can "hang out" in the tcp buffer
++    src.close();
++    snk.close();
++    // sent event should truncated and accepted
++    assertEquals(1, src.enqueued.get());
++  }
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventAdaptor.java b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventAdaptor.java
+deleted file mode 100644
+index f853dc1..0000000
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventAdaptor.java
++++ /dev/null
+@@ -1,75 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.handlers.thrift;
+-
+-import java.util.Arrays;
+-import java.util.Map.Entry;
+-
+-import org.junit.Assert;
+-import org.junit.Before;
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventImpl;
+-
+-public class TestThriftEventAdaptor {
+-
+-  private Event testEvent;
+-
+-  @Before
+-  public void setUp() {
+-    testEvent = new EventImpl();
+-
+-    testEvent.set("one", "one".getBytes());
+-    testEvent.set("two", "two".getBytes());
+-  }
+-
+-  @Test
+-  public void testConvert() {
+-    ThriftFlumeEvent thriftEvent = ThriftEventAdaptor.convert(testEvent);
+-
+-    Assert.assertNotNull(thriftEvent);
+-    Assert.assertNotNull(thriftEvent.host);
+-    Assert.assertNotNull(thriftEvent.timestamp);
+-    Assert.assertNotNull(thriftEvent.fields);
+-    Assert.assertNotNull(thriftEvent.priority);
+-
+-    for (Entry<String, byte[]> entry : testEvent.getAttrs().entrySet()) {
+-      Assert.assertTrue(thriftEvent.fields.containsKey(entry.getKey()));
+-      Assert.assertTrue(Arrays.equals(thriftEvent.fields.get(entry.getKey())
+-          .array(), entry.getValue()));
+-    }
+-  }
+-
+-  @Test
+-  public void testInvalidAttribute() {
+-    ThriftFlumeEvent thriftEvent = ThriftEventAdaptor.convert(testEvent);
+-
+-    Assert.assertNotNull(thriftEvent);
+-    Assert
+-        .assertNull(new ThriftEventAdaptor(thriftEvent).get("i do not exist"));
+-  }
+-
+-  @Test
+-  public void testNullBody() {
+-    ThriftFlumeEvent tEvt = new ThriftFlumeEvent(); // null body
+-    Assert.assertEquals(null, tEvt.body);
+-    Assert.assertEquals(0, new ThriftEventAdaptor(tEvt).getBody().length);
+-  }
+-
+-}
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
+new file mode 100644
+index 0000000..91f9528
+--- /dev/null
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
+@@ -0,0 +1,105 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.thrift;
++
++import java.nio.ByteBuffer;
++import java.util.Arrays;
++import java.util.HashMap;
++import java.util.Map.Entry;
++
++import org.junit.Assert;
++import org.junit.Before;
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventImpl;
++
++public class TestThriftEventConvertUtil {
++
++  private Event testEvent;
++
++  @Before
++  public void setUp() {
++    testEvent = new EventImpl();
++
++    testEvent.set("one", "one".getBytes());
++    testEvent.set("two", "two".getBytes());
++  }
++
++  @Test
++  public void testConvert() {
++    ThriftFlumeEvent thriftEvent = ThriftEventConvertUtil.toThriftEvent(testEvent);
++
++    Assert.assertNotNull(thriftEvent);
++    Assert.assertNotNull(thriftEvent.host);
++    Assert.assertNotNull(thriftEvent.timestamp);
++    Assert.assertNotNull(thriftEvent.fields);
++    Assert.assertNotNull(thriftEvent.priority);
++
++    for (Entry<String, byte[]> entry : testEvent.getAttrs().entrySet()) {
++      Assert.assertTrue(thriftEvent.fields.containsKey(entry.getKey()));
++      Assert.assertTrue(Arrays.equals(thriftEvent.fields.get(entry.getKey())
++          .array(), entry.getValue()));
++    }
++  }
++
++  @Test
++  public void testInvalidAttribute() {
++    ThriftFlumeEvent thriftEvent = ThriftEventConvertUtil.toThriftEvent(testEvent);
++
++    Assert.assertNotNull(thriftEvent);
++    Assert.assertNull(ThriftEventConvertUtil.toFlumeEvent(thriftEvent).get(
++        "i do not exist"));
++  }
++
++  @Test
++  public void testNullBody() {
++    ThriftFlumeEvent tEvt = new ThriftFlumeEvent(); // null body
++    Assert.assertEquals(null, tEvt.body);
++    Assert.assertEquals(0,
++        ThriftEventConvertUtil.toFlumeEvent(tEvt).getBody().length);
++  }
++
++  /**
++   * This event is evil because it surpasses the max event size.
++   */
++  @Test(expected = RuntimeException.class)
++  public void testEvilEvent() {
++    long maxSize = FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer toobig = ByteBuffer.allocate((int) (maxSize * 2));
++    ThriftFlumeEvent tevt = new ThriftFlumeEvent(0L, Priority.INFO, toobig, 0L,
++        "localhost", new HashMap<String, ByteBuffer>());
++    Event e = ThriftEventConvertUtil.toFlumeEvent(tevt);
++    EventImpl.select(e);
++  }
++
++  /**
++   * This event is evil because it surpasses the max event size.
++   */
++  @Test
++  public void testTruncEvilEvent() {
++    long maxSize = FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer toobig = ByteBuffer.allocate((int) (maxSize * 2));
++    ThriftFlumeEvent tevt = new ThriftFlumeEvent(0L, Priority.INFO, toobig, 0L,
++        "localhost", new HashMap<String, ByteBuffer>());
++    Event e = ThriftEventConvertUtil.toFlumeEvent(tevt, true);
++    EventImpl.select(e);
++  }
++
++}
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
+index 2957950..9bf4a4b 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftSinks.java
+@@ -20,13 +20,17 @@ package com.cloudera.flume.handlers.thrift;
+ 
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
+ 
+ import java.io.IOException;
++import java.nio.ByteBuffer;
+ import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicLong;
+ 
+ import org.apache.log4j.Level;
+ import org.apache.log4j.Logger;
++import org.apache.thrift.TException;
+ import org.apache.thrift.server.TSaneThreadPoolServer;
+ import org.codehaus.jettison.json.JSONException;
+ import org.junit.Before;
+@@ -36,6 +40,7 @@ import com.cloudera.flume.ExampleData;
+ import com.cloudera.flume.conf.FlumeBuilder;
+ import com.cloudera.flume.conf.FlumeConfiguration;
+ import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.flume.conf.LogicalNodeContext;
+ import com.cloudera.flume.conf.ReportTestingContext;
+ import com.cloudera.flume.core.EventImpl;
+ import com.cloudera.flume.core.EventSink;
+@@ -46,6 +51,7 @@ import com.cloudera.flume.handlers.debug.NoNlASCIISynthSource;
+ import com.cloudera.flume.reporter.ReportEvent;
+ import com.cloudera.flume.reporter.ReportUtil;
+ import com.cloudera.flume.reporter.aggregator.CounterSink;
++import com.cloudera.util.Clock;
+ import com.cloudera.util.NetUtils;
+ 
+ /**
+@@ -282,4 +288,69 @@ public class TestThriftSinks implements ExampleData {
+     assertNotNull(rpt.getLongMetric(ThriftEventSink.A_SERVERPORT));
+   }
+ 
++  @Test
++  public void testTruncateReject() throws FlumeSpecException, IOException,
++      TException, InterruptedException {
++    final ThriftEventSource src = (ThriftEventSource) FlumeBuilder.buildSource(
++        LogicalNodeContext.testingContext(),
++        "thriftSource(1234,truncate=false)");
++    int sz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer bb = ByteBuffer.allocate(sz * 2); // too big
++    final ThriftFlumeEvent tfe = new ThriftFlumeEvent(0L, Priority.INFO, bb,
++        0L, "foo", null);
++    final ThriftEventSink snk = new ThriftEventSink("localhost", 1234);
++    final CountDownLatch done = new CountDownLatch(1);
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          src.open();
++          snk.open();
++          snk.client.append(tfe); // send non-compliant ThriftFlumeEvent
++        } catch (Exception e) {
++        } finally {
++          done.countDown();
++        }
++      }
++    };
++    t.start();
++    // other thread should not block
++    assertTrue(done.await(5, TimeUnit.SECONDS));
++    src.close();
++    snk.close();
++    assertEquals(0, src.enqueued.get()); // sent event should be rejected
++  }
++
++  @Test
++  public void testTruncate() throws TException, InterruptedException,
++      FlumeSpecException, IOException {
++    final ThriftEventSource src = (ThriftEventSource) FlumeBuilder.buildSource(
++        LogicalNodeContext.testingContext(),
++        "thriftSource(1234,truncate=true)");
++    int sz = (int) FlumeConfiguration.get().getEventMaxSizeBytes();
++    ByteBuffer bb = ByteBuffer.allocate(sz * 2);
++    final ThriftFlumeEvent tfe = new ThriftFlumeEvent(0L, Priority.INFO, bb,
++        0L, "foo", null);
++    final ThriftEventSink snk = new ThriftEventSink("localhost", 1234);
++    final CountDownLatch done = new CountDownLatch(1);
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          src.open();
++          snk.open();
++          snk.client.append(tfe); // send non-compliant ThriftFlumeEvent
++        } catch (Exception e) {
++        } finally {
++          done.countDown();
++        }
++      }
++    };
++    t.start();
++    // other thread should not block
++    assertTrue(done.await(5, TimeUnit.SECONDS));
++    Clock.sleep(250); // data can "hang out" in the tcp buffer
++    src.close();
++    snk.close();
++    // sent event should truncated and accepted
++    assertEquals(1, src.enqueued.get());
++  }
+ }
+diff --git a/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java b/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
+index eb61d91..10b60c6 100644
+--- a/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
++++ b/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
+@@ -30,7 +30,7 @@ import org.apache.log4j.AppenderSkeleton;
+ import org.apache.log4j.helpers.LogLog;
+ import org.apache.log4j.spi.LoggingEvent;
+ 
+-import com.cloudera.flume.handlers.avro.AvroEventAdaptor;
++import com.cloudera.flume.handlers.avro.AvroEventConvertUtil;
+ import com.cloudera.flume.handlers.avro.FlumeEventAvroServer;
+ import com.cloudera.flume.handlers.log4j.Log4JEventAdaptor;
+ 
+@@ -204,7 +204,7 @@ public class FlumeLog4jAvroAppender extends AppenderSkeleton {
+          * intermediate object and go from the log4j event directly to the
+          * AvroFlumeEvent.
+          */
+-        client.append(AvroEventAdaptor.convert(new Log4JEventAdaptor(event)));
++        client.append(AvroEventConvertUtil.toAvroEvent(new Log4JEventAdaptor(event)));
+ 
+         break;
+       } catch (UndeclaredThrowableException e) {
+-- 
+1.7.0.4
+

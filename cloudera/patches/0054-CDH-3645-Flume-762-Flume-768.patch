@@ -1,0 +1,414 @@
+From 70fec87f46dcd339ea63d6c092cbc67e8a906cb4 Mon Sep 17 00:00:00 2001
+From: Prasad Mujumdar <prasadm@cloudera.com>
+Date: Fri, 30 Sep 2011 16:23:44 -0700
+Subject: [PATCH 54/65] CDH-3645: Flume-762+Flume-768
+
+---
+ .../flume/core/connector/DirectDriver.java         |   47 +++++-
+ .../cloudera/flume/handlers/rolling/RollSink.java  |    4 +-
+ .../com/cloudera/flume/agent/TestFlumeNode.java    |    4 +-
+ .../agent/diskfailover/TestDiskFailoverDeco.java   |    8 +-
+ .../flume/core/connector/TestDirectDriverExp.java  |  192 ++++++++++++++++++++
+ .../flume/handlers/rolling/TestRollSink.java       |   49 +++++
+ 6 files changed, 293 insertions(+), 11 deletions(-)
+ create mode 100644 flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriverExp.java
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+index 0466394..79eb67a 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
++++ b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+@@ -101,18 +101,59 @@ public class DirectDriver extends Driver {
+ 
+       LOG.debug("Starting driver " + DirectDriver.this);
+       try {
++      Event e = null;
++
+         while (!stopped) {
+-          Event e = source.next();
++          try {
++            e = source.next();
++          } catch(InterruptedException eIn) {
++            // If we are interrupted then its time to go down. re-throw the exception.
++            // Details are logged by the outer catch block
++            throw eIn;
++          } catch (Exception eI) {
++            // If this is a chained or converted Interrupt then throw it back
++            if (eI.getCause() instanceof InterruptedException)
++              throw eI;
++
++            // If there's an exception, try to reopen the source
++            // if the open or close still raises an exception, then bail out
++            LOG.warn("Exception in source: " + source.getName(), eI);
++            LOG.warn("Retrying after Error in source: " + source.getName());
++            source.close();
++            source.open();
++            LOG.info(" Source Retry successful");
++            e = source.next(); // try to get the next event again
++          }
++
+           if (e == null)
+             break;
+           nextCount++;
+ 
+-          sink.append(e);
++          try {
++              sink.append(e);
++            } catch(InterruptedException eIn) {
++              // If we are interrupted then its time to go down. re-throw the exception.
++              // Details are logged by the outer catch block
++              throw eIn;
++            } catch (Exception eI) {
++              // If this is a chained or converted Interrupt then throw it back
++              if (eI.getCause() instanceof InterruptedException)
++                throw eI;
++
++              // If there's an exception, try to reopen the source
++              // if the open or close still raises an exception, then bail out
++              LOG.warn("Exception in sink: " + sink.getName(), eI);
++              LOG.warn("Retrying after Error in source: " + sink.getName());
++              sink.close();
++              sink.open();
++              LOG.info("Sink Retry successful");
++              sink.append(e); // try to sink the event again
++            }
+           appendCount++;
+         }
+       } catch (Exception e1) {
+         // Catches all exceptions or throwables. This is a separate thread
+-        LOG.error("Closing down due to exception during append calls", e1);
++        LOG.error("Closing down due to exception during append calls");
+         errorCleanup(PumperThread.this.getName(), e1);
+         return;
+       }
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+index 32a3411..27302b1 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+@@ -148,15 +148,15 @@ public class RollSink extends EventSink.Base {
+             Clock.sleep(checkLatencyMs);
+           } catch (InterruptedException e) {
+             LOG.debug("TriggerThread interrupted");
+-            doneLatch.countDown();
+             return;
+           }
+         }
+       } catch (InterruptedException e) {
+         LOG.error("RollSink interrupted", e);
+-      }
++      } finally {
+       LOG.debug("TriggerThread shutdown");
+       doneLatch.countDown();
++      }
+     }
+   };
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/TestFlumeNode.java b/flume-core/src/test/java/com/cloudera/flume/agent/TestFlumeNode.java
+index 9d9e1a5..32b0ea4 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/TestFlumeNode.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/TestFlumeNode.java
+@@ -112,14 +112,14 @@ public class TestFlumeNode {
+       }
+ 
+       @Override
+-      public Event next() throws IOException {
++      public Event next() throws IOException, InterruptedException {
+         int i = count.incrementAndGet();
+         if (i > 100) {
+           return null; // close naturally
+         }
+ 
+         // "fail"
+-        throw new IOException("ayiii!");
++        throw new InterruptedException("ayiii!");
+       }
+ 
+       @Override
+diff --git a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
+index a7e2d78..27afefa 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
++++ b/flume-core/src/test/java/com/cloudera/flume/agent/diskfailover/TestDiskFailoverDeco.java
+@@ -65,7 +65,7 @@ public class TestDiskFailoverDeco {
+     EventSink msnk = mock(EventSink.class);
+     doNothing().when(msnk).open();
+     doNothing().when(msnk).close();
+-    doNothing().doThrow(new IOException("foo")).doNothing().when(msnk)
++    doNothing().doThrow(new InterruptedException("foo")).doNothing().when(msnk)
+         .append(Mockito.<Event> anyObject());
+     doReturn(new ReportEvent("blah")).when(msnk).getMetrics();
+ 
+@@ -88,13 +88,13 @@ public class TestDiskFailoverDeco {
+     try {
+       EventUtil.dumpAll(msrc, snk);
+       snk.close();
+-    } catch (IOException ioe) {
+-      // expected the IO exception from the underlying sink to percolate up to
++    } catch (InterruptedException ioe) {
++      // expected the InterruptedException exception from the underlying sink to percolate up to
+       // this append.
+ 
+       return;
+     }
+-    fail("Expected IO exception to percolate to this thread");
++    fail("Expected InterruptedException exception to percolate to this thread");
+ 
+     // TODO (jon) sometimes a IllegalStateException is thrown, sometimes not.
+     // Inconsistency is bad.
+diff --git a/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriverExp.java b/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriverExp.java
+new file mode 100644
+index 0000000..69918b0
+--- /dev/null
++++ b/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriverExp.java
+@@ -0,0 +1,192 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.core.connector;
++
++import java.io.IOException;
++
++import org.junit.Test;
++import static org.junit.Assert.*;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
++
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventImpl;
++import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.core.EventSource;
++import com.cloudera.util.Clock;
++
++/**
++ * This tests the restart of source, sink in various exception cases.
++ * Three scenarios are tested
++ *   1) testHandleException
++ *   source.next and sink.append periodically throw IOException and RuntimeException
++ *   The driver is suppose to retry closing and reopening the source or sink
++ *   The test verifies that the flow continues with these exceptions.
++ *
++ *   2) testBailedExceptions
++ *   Apart from next() and append() exceptions, the sink.open throws RuntimeException
++ *   This should cause the driver to close the flow as it can't reopen the sink.
++ *
++ *   3) testInterruptedException
++ *   Apart from IOException, the source.next periodically throws InterruptedException
++ *   This should cause the driver to close the flow as the InterruptedException is not retried.
++ */
++public class TestDirectDriverExp {
++  Logger LOG = LoggerFactory.getLogger(TestDirectDriver.class);
++
++  // test sink to throw IOExceptions periodically in append.
++  // Optionally throw periodic RuntimeExceptions in open
++  public class ExpSink extends EventSink.Base {
++    boolean doRunTimeExp; // if true then throw RuntimeExceptions in open
++    static final int sinkExp = 7;
++    int count = 1;
++
++    public ExpSink() {
++      doRunTimeExp = false;
++    }
++
++    public ExpSink(boolean needRunTimeExp) {
++      doRunTimeExp = needRunTimeExp;
++    }
++
++    @Override
++    public void append(Event e) throws IOException {
++      count++;
++      if (count % sinkExp == 0) {
++        LOG.info("raising exception at " + count);
++        throw new IOException("*** sink exp in append ***");
++      }
++      LOG.info(e.toString());
++    }
++
++    @Override
++    public void close() throws IOException {
++      LOG.info("close");
++    }
++
++    @Override
++    public void open() throws RuntimeException {
++      if (doRunTimeExp && (count % (sinkExp*2) == 0)) {
++        LOG.info("raising exception at " + count);
++        throw new RuntimeException ("*** runtime exp in sink open ***");
++      }
++      LOG.info("open");
++    }
++  };
++
++  // test source to throw IOExceptions periodically in next.
++  // optionally throws periodic InterruptedException in next
++  public class ExpSource extends EventSource.Base {
++    static final int sourceExp = 17;
++    static final int maxEvents = 36;
++    boolean doInterrupExp;
++    int count = 1;
++
++    public ExpSource() {
++      doInterrupExp = false;
++    }
++
++    public ExpSource(boolean needInterruptExp ) {
++      doInterrupExp = needInterruptExp;
++    }
++
++  @Override
++  public Event next() throws InterruptedException {
++    count++;
++    if (count > maxEvents)
++      return null;
++    else if (doInterrupExp && (count % (sourceExp*2) == 0)) {
++      LOG.info("raising exception at " + count);
++      throw new InterruptedException ("*** interrupt exp in source next ***");
++    }
++    else if (count % sourceExp == 0) {
++      LOG.info("raising exception at " + count);
++      throw new RuntimeException("*** source exp ***");
++    }
++    else
++      return new EventImpl(" junk ".getBytes());
++  }
++
++  @Override
++  public void close() throws InterruptedException {
++    LOG.info("close");
++  }
++
++  @Override
++  public void open() throws RuntimeException {
++    LOG.info("open");
++  }
++
++};
++
++
++  // source and sink throw exceptions. Ensure that the driver continues to retry
++  @Test
++  public void testHandleException() throws IOException,
++      InterruptedException, RuntimeException {
++    EventSink sink = new ExpSink();
++    EventSource source = new ExpSource();
++
++    DirectDriver driver = new DirectDriver(source, sink);
++    driver.start();
++    Clock.sleep(2000); // let the insistent open try a few times.
++    driver.stop();
++    LOG.info("Exception completed. Connection should exit successfully");
++    // The driver should have recovered from source/sink exception
++    assertNull("The driver should have recovered from source/sink exceptions", driver.getException());
++  }
++
++
++  // source and sink throw exceptions. Ensure that the driver continues to retry
++  // sink re-open throws InterruptedException exception at some point. The driver should close
++  // the flow when it sees an exception on retry.
++  @Test
++  public void testBailedExceptions() throws IOException,
++  InterruptedException, RuntimeException{
++    EventSink sink = new ExpSink(true); // sink will throw RuntimeException in close
++    EventSource source = new ExpSource();
++
++    DirectDriver driver = new DirectDriver(source, sink);
++    driver.start();
++    Clock.sleep(2000); // let the insistent open try a few times.
++    driver.stop();
++    LOG.info("testBailedExceptions completed. Connection should exit with runtime error");
++    // The driver should have seen RuntimeException
++    assertNotNull("The driver should have seen RuntimeException ", driver.getException());
++  }
++
++
++  // source and sink throw exceptions. Ensure that the driver continues to retry
++  // source.next throws Interrupted exception. The driver should should not try to
++  // reopen the source at that point and close the flow.
++  @Test
++  public void testInterruptedException() throws IOException,
++  InterruptedException, RuntimeException {
++    EventSink sink = new ExpSink(false);
++    EventSource source = new ExpSource(true);
++
++      DirectDriver driver = new DirectDriver(source, sink);
++      driver.start();
++      Clock.sleep(2000); // let the insistent open try a few times.
++      driver.stop();
++      LOG.info("testInterruptedException completed. Connection should exit with interrupt error");
++      // The driver should have seen InterruptedException
++      assertNotNull("The driver should have seen InterruptedException ", driver.getException());
++  }
++
++}
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+index 1fd788f..3096f59 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+@@ -389,4 +389,53 @@ public class TestRollSink {
+     // See above for why there are 4 triggers:
+     assertEquals(4, (long) rpt.getLongMetric(RollSink.A_ROLLS));
+   }
++
++  /**
++   * This verifies that when roller's trigger aborts, the sink closes correctly
++   */
++  @Test(timeout=30000)
++  public void testTriggerAborted() throws IOException,
++      InterruptedException {
++
++    Tagger tagger = new ProcessTagger() {
++      @Override
++      public String getTag() {
++        return "-testtag";
++      }
++
++      @Override
++      public String newTag() {
++        // throw exception from the Trigger Thread
++        if (Thread.currentThread().getName().contains("Roll-TriggerThread"))
++          throw new RuntimeException("testExp");
++        return "-testtag";
++      }
++    };
++
++    final File f = FileUtil.mktempdir();
++    RollSink snk = new RollSink(new Context(), "test", new TimeTrigger(tagger,
++        10000), 250) {
++      @Override
++      protected EventSink newSink(Context ctx) throws IOException {
++        return new EscapedCustomDfsSink("file:///" + f.getPath(),
++            "sub-%{service}%{rolltag}");
++      }
++    };
++
++    Event e = new EventImpl("this is a test message".getBytes());
++    Attributes.setString(e, "service", "foo");
++    snk.open();
++    snk.append(e);
++    // wait for the trigger thread to abort down
++    while (snk.triggerThread.isAlive()) {
++      Clock.sleep(100);
++    }
++    snk.close();
++    // verify that the trigger thread did the cleanup
++    assertTrue(snk.triggerThread.doneLatch.getCount() == 0);
++    File fo = new File(f.getPath() + "/sub-foo-testtag");
++    assertTrue(fo.exists());
++    FileUtil.rmr(f);
++  }
++
+ }
+-- 
+1.7.0.4
+

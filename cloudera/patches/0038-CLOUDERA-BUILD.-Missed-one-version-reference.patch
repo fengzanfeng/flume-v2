@@ -1,0 +1,25 @@
+From 16b46194ea2981cdbf3cbcbeecb38a722f915670 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Fri, 22 Jul 2011 13:53:34 -0700
+Subject: [PATCH 38/65] CLOUDERA-BUILD. Missed one version reference.
+
+---
+ cloudera/do-release-build |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index 3cd856a..d18af6f 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -18,7 +18,7 @@
+ 
+ ####################
+ # Performs a release build
+-FULL_VERSION=0.9.4-cdh3u1
++FULL_VERSION=0.9.4-cdh3u2-SNAPSHOT
+ 
+ # resolve links - $0 may be a softlink
+ PRG="${0}"
+-- 
+1.7.0.4
+

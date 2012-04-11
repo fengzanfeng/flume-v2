@@ -1,0 +1,84 @@
+From 6edcd1aa494ba5b31c295ddb397c810f26859689 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Tue, 13 Sep 2011 08:05:24 -0700
+Subject: [PATCH 45/65] FLUME-759: Fix Regression due to avro 1.5.2 upgrade (Tom White)
+
+Reason: Feature / Bug
+Author: Tom White
+Ref: CDH-3329
+
+git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1170202 13f79535-47bb-0310-9956-ffa450edef68
+---
+ flume-core/pom.xml                                 |    2 +-
+ .../log4j/appender/FlumeLog4jAvroAppender.java     |    5 +++++
+ pom.xml                                            |    6 +++---
+ 3 files changed, 9 insertions(+), 4 deletions(-)
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index fca430c..5338065 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -93,7 +93,7 @@
+       <plugin>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-maven-plugin</artifactId>
+-        <version>1.5.3</version>
++        <version>1.5.4</version>
+         <executions>
+           <execution>
+             <phase>generate-sources</phase>
+diff --git a/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java b/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
+index 10b60c6..e5d5833 100644
+--- a/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
++++ b/flume-log4j-appender/src/main/java/com/cloudera/flume/log4j/appender/FlumeLog4jAvroAppender.java
+@@ -23,6 +23,7 @@ import java.net.ConnectException;
+ import java.net.MalformedURLException;
+ import java.net.URL;
+ 
++import org.apache.avro.AvroRemoteException;
+ import org.apache.avro.ipc.HttpTransceiver;
+ import org.apache.avro.ipc.Transceiver;
+ import org.apache.avro.ipc.specific.SpecificRequestor;
+@@ -223,6 +224,10 @@ public class FlumeLog4jAvroAppender extends AppenderSkeleton {
+ 
+         Throwable cause = e.getCause();
+ 
++        if (cause instanceof AvroRemoteException) {
++          cause = cause.getCause();
++        }
++
+         /*
+          * We're only interested in attempting to recover from connection
+          * exceptions right now.
+diff --git a/pom.xml b/pom.xml
+index 17696b7..b0c03a6 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -553,7 +553,7 @@
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro</artifactId>
+-        <version>1.5.3</version>
++        <version>1.5.4</version>
+         <exclusions>
+           <exclusion>
+             <groupId>org.xerial.snappy</groupId>
+@@ -571,13 +571,13 @@
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-compiler</artifactId>
+-        <version>1.5.3</version>
++        <version>1.5.4</version>
+       </dependency>
+ 
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-ipc</artifactId>
+-        <version>1.5.3</version>
++        <version>1.5.4</version>
+       </dependency>
+ 
+       <!-- FIXME: This should be removed when we migrate the IRC source / 
+-- 
+1.7.0.4
+

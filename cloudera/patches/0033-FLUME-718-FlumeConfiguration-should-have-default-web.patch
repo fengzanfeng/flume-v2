@@ -1,0 +1,36 @@
+From bbd7cae8d3e01d5831d227cf6883ebc70d802734 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Thu, 28 Jul 2011 07:09:51 -0700
+Subject: [PATCH 33/65] FLUME-718: FlumeConfiguration should have default webapp paths
+
+---
+ .../cloudera/flume/conf/FlumeConfiguration.java    |    6 ++++--
+ 1 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/conf/FlumeConfiguration.java b/flume-core/src/main/java/com/cloudera/flume/conf/FlumeConfiguration.java
+index eecd0a8..cb4bf71 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/conf/FlumeConfiguration.java
++++ b/flume-core/src/main/java/com/cloudera/flume/conf/FlumeConfiguration.java
+@@ -1005,7 +1005,8 @@ public class FlumeConfiguration extends Configuration {
+     if (home == null) {
+       home = ".";
+     }
+-    return home + File.separator + get(WEBAPP_ROOT_MASTER, null);
++    return home + File.separator + get(WEBAPP_ROOT_MASTER,
++      "webapps/flumemaster.war");
+   }
+ 
+   /**
+@@ -1016,7 +1017,8 @@ public class FlumeConfiguration extends Configuration {
+     if (home == null) {
+       home = ".";
+     }
+-    return home + File.separator + get(WEBAPP_ROOT_NODE, null);
++    return home + File.separator + get(WEBAPP_ROOT_NODE,
++        "webapps/flumeagent.war");
+   }
+ 
+   /**
+-- 
+1.7.0.4
+

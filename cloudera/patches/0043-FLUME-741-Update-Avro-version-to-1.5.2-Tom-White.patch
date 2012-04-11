@@ -1,0 +1,74 @@
+From b783d30d588237a0c299567de2a9746581c0f935 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Wed, 17 Aug 2011 16:31:14 +0000
+Subject: [PATCH 43/65] FLUME-741: Update Avro version to 1.5.2 (Tom White)
+
+Reason: Feature
+Author: Tom White
+Ref: CDH-3329
+
+git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1158811 13f79535-47bb-0310-9956-ffa450edef68
+---
+ flume-core/pom.xml                                 |    2 +-
+ .../org/apache/avro/ipc/AccountingTransceiver.java |    2 +-
+ pom.xml                                            |    6 +++---
+ 3 files changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 1b3d963..7095e06 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -93,7 +93,7 @@
+       <plugin>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-maven-plugin</artifactId>
+-        <version>1.5.1</version>
++        <version>1.5.2</version>
+         <executions>
+           <execution>
+             <phase>generate-sources</phase>
+diff --git a/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java b/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
+index 357c9e4..42dc5f4 100644
+--- a/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
++++ b/flume-core/src/main/java/org/apache/avro/ipc/AccountingTransceiver.java
+@@ -18,7 +18,7 @@ public class AccountingTransceiver extends Transceiver {
+   }
+ 
+   @Override
+-  public String getRemoteName() {
++  public String getRemoteName() throws IOException {
+     return xcvr.getRemoteName();
+   }
+ 
+diff --git a/pom.xml b/pom.xml
+index 6eb115c..9c816ff 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -553,7 +553,7 @@
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro</artifactId>
+-        <version>1.5.1</version>
++        <version>1.5.2</version>
+         <exclusions>
+           <exclusion>
+             <groupId>org.xerial.snappy</groupId>
+@@ -571,13 +571,13 @@
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-compiler</artifactId>
+-        <version>1.5.1</version>
++        <version>1.5.2</version>
+       </dependency>
+ 
+       <dependency>
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro-ipc</artifactId>
+-        <version>1.5.1</version>
++        <version>1.5.2</version>
+       </dependency>
+ 
+       <!-- FIXME: This should be removed when we migrate the IRC source / 
+-- 
+1.7.0.4
+

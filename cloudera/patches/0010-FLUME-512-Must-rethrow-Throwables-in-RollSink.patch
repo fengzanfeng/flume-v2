@@ -1,0 +1,105 @@
+From 9d1834ae88781ce5ae9ad5abcbeaadeb2a3d1603 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Fri, 17 Jun 2011 17:55:54 -0700
+Subject: [PATCH 10/65] FLUME-512: Must rethrow Throwables in RollSink
+ - some throwables such as NoClassDefFoundError are Errors which are not exceptions and would inadvertently get swallowed.
+
+---
+ .../flume/core/connector/DirectDriver.java         |    2 +-
+ .../cloudera/flume/handlers/rolling/RollSink.java  |   11 ++++--
+ .../flume/collector/TestCollectorSink.java         |   32 ++++++++++++++++++++
+ 3 files changed, 40 insertions(+), 5 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+index 22dcd38..0466394 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
++++ b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+@@ -112,7 +112,7 @@ public class DirectDriver extends Driver {
+         }
+       } catch (Exception e1) {
+         // Catches all exceptions or throwables. This is a separate thread
+-        LOG.error("Closing down due to exception during append calls");
++        LOG.error("Closing down due to exception during append calls", e1);
+         errorCleanup(PumperThread.this.getName(), e1);
+         return;
+       }
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+index 6b3cf6c..a9d81f4 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+@@ -196,8 +196,11 @@ public class RollSink extends EventSink.Base {
+       } else if (cause instanceof RuntimeException) {
+         throw (RuntimeException) cause;
+       } else {
+-        // we have a throwable that is not an exception.
+-        LOG.error("Got a throwable that is not an exception!", e1);
++        // we have a throwable that is not an exception. (such as a
++        // NoClassDefFoundError)
++        LOG.error("Got a throwable that is not an exception! Bailing out!",
++            e1.getCause());
++        throw new RuntimeException(e1.getCause());
+       }
+     } catch (CancellationException ce) {
+       Thread.currentThread().interrupt();
+@@ -248,7 +251,7 @@ public class RollSink extends EventSink.Base {
+       curSink.close();
+     } catch (IOException ioe) {
+       // Eat this exception and just move to reopening
+-      LOG.warn("IOException when closing subsink",ioe);
++      LOG.warn("IOException when closing subsink", ioe);
+ 
+       // other exceptions propagate out of here.
+     }
+@@ -346,7 +349,7 @@ public class RollSink extends EventSink.Base {
+       trigger.getTagger().newTag();
+       triggerThread = new TriggerThread();
+       triggerThread.doStart();
+-    
++
+       try {
+         curSink = newSink(ctx);
+         curSink.open();
+diff --git a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+index 1f13c7f..232db0e 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+@@ -857,4 +857,36 @@ public class TestCollectorSink {
+     coll.close();
+   }
+ 
++  /**
++   * This test verifies that an error (OutOfMemoryError, NoClassDefinedError)
++   * gets converted into a runtime exception and does not hang a
++   * collector/logical node
++   *
++   * @throws IOException
++   * @throws InterruptedException
++   * @throws FlumeSpecException
++   */
++  @Test(expected = RuntimeException.class)
++  public void testCloseErrorSink() throws IOException, InterruptedException,
++      FlumeSpecException {
++    final EventSink snk = mock(EventSink.class);
++    doThrow(new RuntimeException("Force unexpected append error")).when(snk)
++        .append((Event) anyObject());
++    SinkBuilder sb = new SinkBuilder() {
++      @Override
++      public EventSink build(Context context, String... argv) {
++        return snk;
++      }
++    };
++    SinkFactoryImpl sf = new SinkFactoryImpl();
++    sf.setSink("appendError", sb);
++    FlumeBuilder.setSinkFactory(sf);
++
++    final EventSink coll = FlumeBuilder.buildSink(
++        LogicalNodeContext.testingContext(), "collector(5000) { appendError}");
++    coll.open();
++    coll.append(new EventImpl("foo".getBytes()));
++    coll.close();
++  }
++
+ }
+-- 
+1.7.0.4
+

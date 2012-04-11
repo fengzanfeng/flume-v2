@@ -1,0 +1,59 @@
+From d63a68917717669823871dcc0e53c5cbce6e6731 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Fri, 23 Sep 2011 09:56:17 -0700
+Subject: [PATCH 52/65] CDH-3636. Update flume to use snappy-java-1.0.3.2.
+
+Update Flume to use the same snappy-java version as the rest of
+CDH. Doing this by removing the explicit dependency and the exclusion
+in Avro so that we pick up Avro's snappy-java dependency.
+
+Reason: Bug
+Author: Andrew Bayer
+Ref: CDH-3636
+---
+ flume-core/pom.xml |    5 -----
+ pom.xml            |   12 ------------
+ 2 files changed, 0 insertions(+), 17 deletions(-)
+
+diff --git a/flume-core/pom.xml b/flume-core/pom.xml
+index 5338065..6877329 100644
+--- a/flume-core/pom.xml
++++ b/flume-core/pom.xml
+@@ -268,11 +268,6 @@
+     </dependency>
+ 
+     <dependency>
+-      <groupId>org.xerial.snappy</groupId>
+-      <artifactId>snappy-java</artifactId>
+-    </dependency>
+-
+-    <dependency>
+       <groupId>org.apache.avro</groupId>
+       <artifactId>avro-compiler</artifactId>
+     </dependency>
+diff --git a/pom.xml b/pom.xml
+index b0c03a6..5fae0bc 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -554,18 +554,6 @@
+         <groupId>org.apache.avro</groupId>
+         <artifactId>avro</artifactId>
+         <version>1.5.4</version>
+-        <exclusions>
+-          <exclusion>
+-            <groupId>org.xerial.snappy</groupId>
+-            <artifactId>snappy-java</artifactId>
+-          </exclusion>
+-        </exclusions>
+-      </dependency>
+-
+-      <dependency>
+-        <groupId>org.xerial.snappy</groupId>
+-        <artifactId>snappy-java</artifactId>
+-        <version>1.0.3-rc2</version>
+       </dependency>
+ 
+       <dependency>
+-- 
+1.7.0.4
+

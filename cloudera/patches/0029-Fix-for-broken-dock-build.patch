@@ -1,0 +1,131 @@
+From 311ed8364dac0e00adaaed96af4c2cdd24d8cfa8 Mon Sep 17 00:00:00 2001
+From: Arvind Prabhakar <arvind@cloudera.com>
+Date: Thu, 14 Jul 2011 14:49:28 -0700
+Subject: [PATCH 29/65] Fix for broken dock build.
+
+Includes minimal changes necessary to get the docs to build on
+CentOS with AsciiDoc version 8.1.0.
+---
+ flume-docs/src/docs/UserGuide/Advanced     |    5 +++--
+ flume-docs/src/docs/UserGuide/CustomInput  |    5 ++++-
+ flume-docs/src/docs/UserGuide/DefaultPorts |    3 ++-
+ flume-docs/src/docs/UserGuide/FlumeShell   |    3 ++-
+ flume-docs/src/docs/UserGuide/Plugins      |    4 ++--
+ flume-docs/src/docs/Windows/Windows        |   13 +++++++------
+ 6 files changed, 20 insertions(+), 13 deletions(-)
+
+diff --git a/flume-docs/src/docs/UserGuide/Advanced b/flume-docs/src/docs/UserGuide/Advanced
+index 06ac257..3f82904 100644
+--- a/flume-docs/src/docs/UserGuide/Advanced
++++ b/flume-docs/src/docs/UserGuide/Advanced
+@@ -1,4 +1,5 @@
+-﻿////////////////////
++﻿
++////////////////////
+ Licensed to Cloudera, Inc. under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+@@ -340,7 +341,7 @@ collector tier.
+ 
+ Agents and collectors roles have defaults specified in the `conf/flume-site.xml` 
+ file.  Look at the `conf/flume-conf.xml` file for properties prefixed with 
+-`flume.agent.*` and `flume.collector.*` for descriptions of the configuration 
++`flume.agent.\*` and `flume.collector.\*` for descriptions of the configuration 
+ options.
+ 
+ Each node maintains it own node state and has its own configuration. If the 
+diff --git a/flume-docs/src/docs/UserGuide/CustomInput b/flume-docs/src/docs/UserGuide/CustomInput
+index 7e6102b..c0c578c 100644
+--- a/flume-docs/src/docs/UserGuide/CustomInput
++++ b/flume-docs/src/docs/UserGuide/CustomInput
+@@ -1,4 +1,5 @@
+-﻿////////////////////
++﻿
++////////////////////
+ Licensed to Cloudera, Inc. under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+@@ -174,6 +175,7 @@ For jobs initiated by the user, the easiest mechanism to enable Flume logging is
+ 
+ export HADOOP_ROOT_LOGGER=INFO,flume,console 
+ ////
++To be added
+ 
+ ==== Logging Hadoop Daemons 
+ //// 
+@@ -183,3 +185,4 @@ export HADOOP_ROOT_LOGGER=INFO,flume,DRFA
+ 
+ TODO (jon) this doesn't seem to working right now --  need to figure out why. 
+ ////
++To be added
+diff --git a/flume-docs/src/docs/UserGuide/DefaultPorts b/flume-docs/src/docs/UserGuide/DefaultPorts
+index 0f190ad..abaa9b1 100644
+--- a/flume-docs/src/docs/UserGuide/DefaultPorts
++++ b/flume-docs/src/docs/UserGuide/DefaultPorts
+@@ -1,4 +1,5 @@
+-﻿////////////////////
++﻿
++////////////////////
+ Licensed to Cloudera, Inc. under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+diff --git a/flume-docs/src/docs/UserGuide/FlumeShell b/flume-docs/src/docs/UserGuide/FlumeShell
+index fc5f223..a375751 100644
+--- a/flume-docs/src/docs/UserGuide/FlumeShell
++++ b/flume-docs/src/docs/UserGuide/FlumeShell
+@@ -1,4 +1,5 @@
+-﻿////////////////////
++﻿
++////////////////////
+ Licensed to Cloudera, Inc. under one
+ or more contributor license agreements.  See the NOTICE file
+ distributed with this work for additional information
+diff --git a/flume-docs/src/docs/UserGuide/Plugins b/flume-docs/src/docs/UserGuide/Plugins
+index 87a5867..4963217 100644
+--- a/flume-docs/src/docs/UserGuide/Plugins
++++ b/flume-docs/src/docs/UserGuide/Plugins
+@@ -49,7 +49,7 @@ IMPORTANT: if you use the provided +flume-site.xml.template+ file to
+ create your +flume-site.xml+ be sure to comment out or remove any
+ example properties contained in the sample template.
+ +
+-.Example flume-site.xml contents
++. Example flume-site.xml contents
+ [source,xml]
+ ----
+ <configuration>
+@@ -71,7 +71,7 @@ export FLUME_CLASSPATH=`pwd`/plugins/helloworld/helloworld_plugin.jar
+ .. in terminal 2 run +bin/flume node -n hello1+
+ . At this point the master and hello1 nodes should be started and will have loaded the plugin
+ +
+-.You should see log output similar to the following in both master and hello1:
++. You should see log output similar to the following in both master and hello1:
+ ----
+ 10/07/29 17:35:28 INFO conf.SourceFactoryImpl: Found source builder helloWorldSource in helloworld.HelloWorldSource
+ 10/07/29 17:35:28 INFO conf.SinkFactoryImpl: Found sink builder helloWorldSink in helloworld.HelloWorldSink
+diff --git a/flume-docs/src/docs/Windows/Windows b/flume-docs/src/docs/Windows/Windows
+index 1a364c2..f54b09d 100644
+--- a/flume-docs/src/docs/Windows/Windows
++++ b/flume-docs/src/docs/Windows/Windows
+@@ -164,12 +164,13 @@ The installation directory where the Flume node programs are installed
+ is called +%FLUME_HOME%+.  By default this is +C:\Program
+ Files\Cloudera\Flume 0.9.3\+.
+ 
+-[width="50%",options="header"]
+-|=================================================================================
+-|Directory          |Purpose
+-|%FLUME_HOME%\logs  |Directory where Flume node logs are saved.
+-|%FLUME_HOME%\conf  |Directory where flume-site.xml and flume-conf.xml are located
+-|=================================================================================
++[grid="all"]
++`-------------------`------------------------------------------------------------
++Directory            Purpose
++---------------------------------------------------------------------------------
++%FLUME_HOME%\logs    Directory where Flume node logs are saved.
++%FLUME_HOME%\conf    Directory where flume-site.xml and flume-conf.xml are located
++---------------------------------------------------------------------------------
+ 
+ The +FLUME_CONF_DIR+ environment variable is respected -- you can keep
+ xml configs in a separate directory pointed to by this variable for
+-- 
+1.7.0.4
+

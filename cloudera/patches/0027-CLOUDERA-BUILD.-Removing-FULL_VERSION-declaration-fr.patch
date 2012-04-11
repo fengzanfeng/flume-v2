@@ -1,0 +1,25 @@
+From cadb2848eb34bba0058661fd13856ff6252b3fa7 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew.bayer@gmail.com>
+Date: Tue, 12 Jul 2011 11:23:17 -0700
+Subject: [PATCH 27/65] CLOUDERA-BUILD. Removing FULL_VERSION declaration from do-release-build.
+
+---
+ cloudera/do-release-build |    2 --
+ 1 files changed, 0 insertions(+), 2 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index b13b64a..509b95a 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -19,8 +19,6 @@
+ ####################
+ # Performs a release build
+ 
+-FULL_VERSION=0.9.4-cdh3u1-SNAPSHOT
+-
+ # resolve links - $0 may be a softlink
+ PRG="${0}"
+ 
+-- 
+1.7.0.4
+

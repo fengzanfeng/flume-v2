@@ -1,0 +1,41 @@
+From 9f532a294e51552557cdc8d54b704036c4383b27 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Tue, 5 Jul 2011 23:13:06 -0700
+Subject: [PATCH 25/65] CLOUDERA-BUILD: exclude flakey tests
+ - TestCollectorSink
+ - TestLivenessManager
+ - TestConcurrentWALMan
+ - TestConcurrentDFOMan
+ - TestTailSource.java
+
+---
+ pom.xml |   13 +++++++++++++
+ 1 files changed, 13 insertions(+), 0 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 3e08828..6d2fb76 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -380,6 +380,19 @@
+             <forkMode>always</forkMode>
+             <forkedProcessTimeoutInSeconds>480</forkedProcessTimeoutInSeconds>
+             <redirectTestOutputToFile>true</redirectTestOutputToFile>
++	    <excludes>
++	      <exclude>**/TestCollectorSink.java</exclude> 
++	      <!-- testHdfsDownInterruptBeforeOpen -->
++	      <exclude>**/TestLivenessManager.java</exclude> 
++	      <!-- testNoHang -->	
++	      <exclude>**/TestConcurrentWALMan.java</exclude> 
++	      <!-- test10thread -->	
++	      <exclude>**/TestConcurrentDFOMan.java</exclude> 
++	      <!-- test100thread -->	      
++	      <exclude>**/TestTailSource.java</exclude> 
++	      <!-- testCloseBlocksUntilThreadDone -->	      
++
++	    </excludes>
+           </configuration>
+         </plugin>
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,37 @@
+From d3975f0d12faa7847f838cb6b014957ef22eabf5 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Sun, 4 Sep 2011 09:23:33 -0700
+Subject: [PATCH 40/65] Revert "CLOUDERA-BUILD: exclude flakey tests"
+
+This reverts commit 9f532a294e51552557cdc8d54b704036c4383b27.
+---
+ pom.xml |   13 -------------
+ 1 files changed, 0 insertions(+), 13 deletions(-)
+
+diff --git a/pom.xml b/pom.xml
+index 83fe5e9..3f39343 100644
+--- a/pom.xml
++++ b/pom.xml
+@@ -381,19 +381,6 @@
+             <forkMode>always</forkMode>
+             <forkedProcessTimeoutInSeconds>480</forkedProcessTimeoutInSeconds>
+             <redirectTestOutputToFile>true</redirectTestOutputToFile>
+-	    <excludes>
+-	      <exclude>**/TestCollectorSink.java</exclude> 
+-	      <!-- testHdfsDownInterruptBeforeOpen -->
+-	      <exclude>**/TestLivenessManager.java</exclude> 
+-	      <!-- testNoHang -->	
+-	      <exclude>**/TestConcurrentWALMan.java</exclude> 
+-	      <!-- test10thread -->	
+-	      <exclude>**/TestConcurrentDFOMan.java</exclude> 
+-	      <!-- test100thread -->	      
+-	      <exclude>**/TestTailSource.java</exclude> 
+-	      <!-- testCloseBlocksUntilThreadDone -->	      
+-
+-	    </excludes>
+           </configuration>
+         </plugin>
+ 
+-- 
+1.7.0.4
+

@@ -1,0 +1,106 @@
+From de8139ab4a945acb92b3e32160575f70ce66b792 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Sat, 30 Jul 2011 09:11:52 -0700
+Subject: [PATCH 32/65] FLUME-719: Flume attribute field map from Avro|ThriftEventConvertUtil.toFlumeEvent() should be mutable
+
+---
+ .../flume/handlers/avro/AvroEventConvertUtil.java  |    2 +-
+ .../handlers/thrift/ThriftEventConvertUtil.java    |    4 ++--
+ .../handlers/avro/TestAvroEventConvertUtil.java    |   15 +++++++++++++++
+ .../thrift/TestThriftEventConvertUtil.java         |   16 ++++++++++++++++
+ 4 files changed, 34 insertions(+), 3 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
+index 2079189..17cee6c 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventConvertUtil.java
+@@ -143,7 +143,7 @@ public class AvroEventConvertUtil {
+   private static Map<String, byte[]> getAttrs(
+       Map<CharSequence, ByteBuffer> fields) {
+     if (fields == null) {
+-      return Collections.<String, byte[]> emptyMap();
++      return new HashMap<String, byte[]>();
+     }
+     HashMap<String, byte[]> tempMap = new HashMap<String, byte[]>();
+     for (CharSequence u : fields.keySet()) {
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
+index c9537a8..16330b0 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventConvertUtil.java
+@@ -150,7 +150,7 @@ class ThriftEventConvertUtil {
+ 
+   private static Map<String, byte[]> getAttrs(ThriftFlumeEvent evt) {
+     if (evt.fields == null) {
+-      return Collections.<String, byte[]> emptyMap();
++      return new HashMap<String, byte[]>();
+     }
+     Map<String, ByteBuffer> tempMap = Collections.unmodifiableMap(evt.fields);
+     Map<String, byte[]> returnMap = new HashMap<String, byte[]>();
+@@ -158,7 +158,7 @@ class ThriftEventConvertUtil {
+       ByteBuffer buf = tempMap.get(key);
+       returnMap.put(key, buf.array());
+     }
+-    return Collections.unmodifiableMap(returnMap);
++    return returnMap;
+   }
+ 
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
+index 8245395..894808a 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroEventConvertUtil.java
+@@ -112,4 +112,19 @@ public class TestAvroEventConvertUtil {
+     EventImpl.select(e);
+   }
+ 
++  /**
++   * Test to make sure when a avro event is converted into a flume event,
++   * the event can be extended with new attributes.
++   */
++  @Test
++  public void testAddAttr() {
++    AvroFlumeEvent afe = AvroEventConvertUtil.toAvroEvent(testEvent);
++    Event e = AvroEventConvertUtil.toFlumeEvent(afe);
++    e.set("test", "data".getBytes());
++
++    AvroFlumeEvent afeNull = new AvroFlumeEvent();
++    Event e2 = AvroEventConvertUtil.toFlumeEvent(afeNull);
++    e2.set("test", "data".getBytes());
++  }
++
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
+index 91f9528..39cc844 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/thrift/TestThriftEventConvertUtil.java
+@@ -29,6 +29,8 @@ import org.junit.Test;
+ import com.cloudera.flume.conf.FlumeConfiguration;
+ import com.cloudera.flume.core.Event;
+ import com.cloudera.flume.core.EventImpl;
++import com.cloudera.flume.handlers.avro.AvroEventConvertUtil;
++import com.cloudera.flume.handlers.avro.AvroFlumeEvent;
+ 
+ public class TestThriftEventConvertUtil {
+ 
+@@ -102,4 +104,18 @@ public class TestThriftEventConvertUtil {
+     EventImpl.select(e);
+   }
+ 
++  /**
++   * Test to make sure when a thrift event is converted into a flume event,
++   * the event can be extended with new attributes.
++   */
++  @Test
++  public void testAddAttr() {
++    ThriftFlumeEvent tfe = ThriftEventConvertUtil.toThriftEvent(testEvent);
++    Event e = ThriftEventConvertUtil.toFlumeEvent(tfe);
++    e.set("test", "data".getBytes());
++
++    ThriftFlumeEvent tfeNull = new ThriftFlumeEvent();
++    Event e2 = ThriftEventConvertUtil.toFlumeEvent(tfeNull);
++    e2.set("test", "data".getBytes());
++  }
+ }
+-- 
+1.7.0.4
+

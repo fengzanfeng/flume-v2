@@ -1,0 +1,28 @@
+From 49f6292c1ccd8ee9187021fe0f9e7c1977a2c3df Mon Sep 17 00:00:00 2001
+From: Roman Shaposhnik <rvs@cloudera.com>
+Date: Wed, 5 Oct 2011 15:08:07 -0700
+Subject: [PATCH 57/65] FLUME-770: setting FLUME_IDENT_STRING based on $USER is not robust
+
+Reason: Bug
+Author: Roman Shaposhnik
+Ref: DISTRO-321
+---
+ bin/flume-daemon.sh |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/bin/flume-daemon.sh b/bin/flume-daemon.sh
+index f4624fb..ad9de22 100755
+--- a/bin/flume-daemon.sh
++++ b/bin/flume-daemon.sh
+@@ -70,7 +70,7 @@ if [ "$FLUME_PID_DIR" = "" ]; then
+ fi
+ 
+ if [ "$FLUME_IDENT_STRING" = "" ]; then
+-  export FLUME_IDENT_STRING="$USER"
++  export FLUME_IDENT_STRING="`id -nu`"
+ fi
+ 
+ # some variables
+-- 
+1.7.0.4
+

@@ -1,0 +1,32 @@
+From e3fc4234cdaa6865b53cfc0f9620ea87a6ded4f0 Mon Sep 17 00:00:00 2001
+From: Andrew Bayer <andrew@cloudera.com>
+Date: Wed, 10 Aug 2011 13:34:17 -0700
+Subject: [PATCH 34/65] CLOUDERA-BUILD. Fixes CDH-3386, DISTRO-293.
+
+Calling mvn with package, rather than install, results in the assembly
+both using the locally built flume-core SNAPSHOT jar from the reactor
+and the deployed unique version SNAPSHOT jar (the one with the
+timestamp in its filename) from the remote Maven repo. In general,
+there's no reason not to use install rather than package.
+
+Also added source:jar and javadoc:javadoc goals for DISTRO-293.
+---
+ cloudera/do-release-build |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index f98e628..3cd856a 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -73,7 +73,7 @@ fi
+ #echo
+ 
+ # Add -Pfull-build to include documentation build
+-mvn clean package -Dmaven.revision=${FLUME_GIT_HASH} -Dthrift.executable=${THRIFT_HOME}/bin/thrift -DskipTests -Pfull-build ${DO_MAVEN_DEPLOY}
++mvn clean source:jar install javadoc:javadoc -Dmaven.revision=${FLUME_GIT_HASH} -Dthrift.executable=${THRIFT_HOME}/bin/thrift -DskipTests -Pfull-build ${DO_MAVEN_DEPLOY}
+ 
+ mkdir build
+ cp flume-distribution/target/flume-distribution-${FULL_VERSION}-project.tar.gz build/flume-${FULL_VERSION}.tar.gz
+-- 
+1.7.0.4
+

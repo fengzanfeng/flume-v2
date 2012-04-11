@@ -1,0 +1,25 @@
+From 60f2358485f60392075e457c9f078a612b51b738 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Fri, 1 Jul 2011 11:10:27 -0700
+Subject: [PATCH 15/65] Backport FLUME-603: changed version in flume-microbenchmarks pom file to make compatible with 0.9.4 branch.
+
+---
+ flume-microbenchmarks/pom.xml |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+diff --git a/flume-microbenchmarks/pom.xml b/flume-microbenchmarks/pom.xml
+index aaa9af6..9ebb194 100644
+--- a/flume-microbenchmarks/pom.xml
++++ b/flume-microbenchmarks/pom.xml
+@@ -6,7 +6,7 @@
+   <parent>
+     <artifactId>flume</artifactId>
+     <groupId>com.cloudera</groupId>
+-    <version>0.9.5-SNAPSHOT</version>
++    <version>0.9.4</version>
+   </parent>
+ 
+   <name>Flume Microbenchmark tests</name>
+-- 
+1.7.0.4
+

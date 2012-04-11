@@ -1,0 +1,553 @@
+From 15e4416396ace7734c61b544752e308257097c4e Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Mon, 13 Jun 2011 23:42:03 -0700
+Subject: [PATCH 07/65] FLUME-656: Flume node deadlocks on roll sink rotate with failing subsink
+
+---
+ .../flume/core/connector/DirectDriver.java         |   10 +-
+ .../cloudera/flume/handlers/rolling/RollSink.java  |  168 ++++++++++++++++---
+ .../flume/core/connector/TestDirectDriver.java     |   14 ++-
+ .../flume/handlers/rolling/TestRollSink.java       |  123 ++++++++++++---
+ 4 files changed, 260 insertions(+), 55 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+index 0fe8956..22dcd38 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
++++ b/flume-core/src/main/java/com/cloudera/flume/core/connector/DirectDriver.java
+@@ -157,14 +157,14 @@ public class DirectDriver extends Driver {
+       }
+     }
+ 
+-    void errorCleanup(String nodeName, Exception ex) {
+-      LOG.info("Connector " + nodeName + " exited with error: "
+-          + ex.getMessage());
+-      ensureClosed(nodeName);
++    void errorCleanup(String node, Exception ex) {
++      LOG.info("Connector " + node + " exited with error: " + ex.getMessage(),
++          ex);
++      ensureClosed(node);
+       synchronized (stateSignal) {
+         lastExn = ex;
+         stopped = true;
+-        LOG.error("Exiting driver " + nodeName + " in error state "
++        LOG.error("Exiting driver " + node + " in error state "
+             + DirectDriver.this + " because " + ex.getMessage());
+         state = DriverState.ERROR;
+         stateSignal.notifyAll();
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+index bd9097e..6b3cf6c 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+@@ -19,8 +19,17 @@ package com.cloudera.flume.handlers.rolling;
+ 
+ import java.io.IOException;
+ import java.util.Map;
++import java.util.concurrent.Callable;
++import java.util.concurrent.CancellationException;
+ import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.ExecutionException;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++import java.util.concurrent.Future;
++import java.util.concurrent.TimeUnit;
+ import java.util.concurrent.atomic.AtomicLong;
++import java.util.concurrent.locks.ReadWriteLock;
++import java.util.concurrent.locks.ReentrantReadWriteLock;
+ 
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+@@ -32,6 +41,7 @@ import com.cloudera.flume.conf.SinkFactory.SinkBuilder;
+ import com.cloudera.flume.core.CompositeSink;
+ import com.cloudera.flume.core.Event;
+ import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.handlers.debug.LazyOpenDecorator;
+ import com.cloudera.flume.reporter.ReportEvent;
+ import com.cloudera.flume.reporter.ReportUtil;
+ import com.cloudera.flume.reporter.Reportable;
+@@ -51,6 +61,8 @@ public class RollSink extends EventSink.Base {
+   final RollTrigger trigger;
+   protected TriggerThread triggerThread = null;
+ 
++  protected ExecutorService executor = null;
++
+   private static int threadInitNumber = 0;
+   final long checkLatencyMs; // default 4x a second
+   private Context ctx; // roll context
+@@ -62,6 +74,8 @@ public class RollSink extends EventSink.Base {
+   public final String A_ROLL_TAG; // TODO (jon) parameterize this.
+   public final static String DEFAULT_ROLL_TAG = "rolltag";
+ 
++  final ReadWriteLock lock = new ReentrantReadWriteLock();
++
+   final AtomicLong rolls = new AtomicLong();
+   final AtomicLong rollfails = new AtomicLong();
+ 
+@@ -155,9 +169,49 @@ public class RollSink extends EventSink.Base {
+     }
+   };
+ 
++  // currently it is assumed that there is only one thread handling appends, but
++  // this has to be thread safe with respect to open and close (rotate) calls.
++  Future<Void> future;
++
+   // This is a large synchronized section. Won't fix until it becomes a problem.
+   @Override
+-  public void append(Event e) throws IOException, InterruptedException {
++  public void append(final Event e) throws IOException, InterruptedException {
++    Callable<Void> task = new Callable<Void>() {
++      public Void call() throws Exception {
++        synchronousAppend(e);
++        return null;
++      }
++    };
++
++    // keep track of the last future.
++    future = executor.submit(task);
++    try {
++      future.get();
++    } catch (ExecutionException e1) {
++      Throwable cause = e1.getCause();
++      if (cause instanceof IOException) {
++        throw (IOException) cause;
++      } else if (cause instanceof InterruptedException) {
++        throw (InterruptedException) cause;
++      } else if (cause instanceof RuntimeException) {
++        throw (RuntimeException) cause;
++      } else {
++        // we have a throwable that is not an exception.
++        LOG.error("Got a throwable that is not an exception!", e1);
++      }
++    } catch (CancellationException ce) {
++      Thread.currentThread().interrupt();
++      throw new InterruptedException(
++          "Blocked append interrupted by rotation event");
++    } catch (InterruptedException ex) {
++      LOG.warn("Unexpected Exception " + ex.getMessage(), ex);
++      Thread.currentThread().interrupt();
++      throw (InterruptedException) ex;
++    }
++  }
++
++  public void synchronousAppend(Event e) throws IOException,
++      InterruptedException {
+     Preconditions.checkState(curSink != null,
+         "Attempted to append when rollsink not open");
+ 
+@@ -170,26 +224,52 @@ public class RollSink extends EventSink.Base {
+     String tag = trigger.getTagger().getTag();
+ 
+     e.set(A_ROLL_TAG, tag.getBytes());
+-    synchronized (this) {
++    lock.readLock().lock();
++    try {
+       curSink.append(e);
+       trigger.append(e);
+       super.append(e);
++    } finally {
++      lock.readLock().unlock();
+     }
+   }
+ 
+-  synchronized public boolean rotate() throws InterruptedException {
++  /**
++   * This method assumes it will be guarded by locks
++   */
++  boolean synchronousRotate() throws InterruptedException, IOException {
++    rolls.incrementAndGet();
++    if (curSink == null) {
++      // wtf, was closed or never opened
++      LOG.error("Attempting to rotate an already closed roller");
++      return false;
++    }
+     try {
+-      rolls.incrementAndGet();
+-      if (curSink == null) {
+-        // wtf, was closed or never opened
+-        LOG.error("Attempting to rotate an already closed roller");
+-        return false;
+-      }
+       curSink.close();
+-      curSink = newSink(ctx);
+-      curSink.open();
++    } catch (IOException ioe) {
++      // Eat this exception and just move to reopening
++      LOG.warn("IOException when closing subsink",ioe);
++
++      // other exceptions propagate out of here.
++    }
++    curSink = newSink(ctx);
++    curSink.open();
++    LOG.debug("rotated sink ");
++    return true;
++  }
++
++  public boolean rotate() throws InterruptedException {
++    while (!lock.writeLock().tryLock(1000, TimeUnit.MILLISECONDS)) {
++      // interrupt the future on the other.
++      if (future != null) {
++        future.cancel(true);
++      }
+ 
+-      LOG.debug("rotated sink ");
++      // NOTE: there is no guarantee that this cancel actually succeeds.
++    }
++    // interrupted, lets go.
++    try {
++      synchronousRotate();
+     } catch (IOException e1) {
+       // TODO This is an error condition that needs to be handled -- could be
+       // due to resource exhaustion.
+@@ -197,6 +277,8 @@ public class RollSink extends EventSink.Base {
+           + e1.getMessage());
+       rollfails.incrementAndGet();
+       return false;
++    } finally {
++      lock.writeLock().unlock();
+     }
+     return true;
+   }
+@@ -205,6 +287,23 @@ public class RollSink extends EventSink.Base {
+   public void close() throws IOException, InterruptedException {
+     LOG.info("closing RollSink '" + fspec + "'");
+ 
++    // attempt to get the lock, and if we cannot, issue a cancel
++    while (!lock.writeLock().tryLock(1000, TimeUnit.MILLISECONDS)) {
++      // interrupt the future on the other.
++      if (future != null) {
++        future.cancel(true);
++      }
++    }
++
++    // we have the write lock now.
++    try {
++      if (executor != null) {
++        executor.shutdown();
++        executor = null;
++      }
++    } finally {
++      lock.writeLock().unlock();
++    }
+     // TODO triggerThread can race with an open call, but we really need to
+     // avoid having the await while locked!
+     if (triggerThread != null) {
+@@ -212,37 +311,52 @@ public class RollSink extends EventSink.Base {
+         triggerThread.interrupt();
+         triggerThread.doneLatch.await();
+       } catch (InterruptedException e) {
+-        LOG
+-            .warn("Interrupted while waiting for batch timeout thread to finish");
++        LOG.warn("Interrupted while waiting for batch timeout thread to finish");
+         // TODO check finally
+         throw e;
+       }
+     }
+ 
+-    synchronized (this) {
++    lock.writeLock().lock();
++    try {
+       if (curSink == null) {
+         LOG.info("double close '" + fspec + "'");
+         return;
+       }
+       curSink.close();
+       curSink = null;
++    } finally {
++      lock.writeLock().unlock();
+     }
+   }
+ 
+   @Override
+-  synchronized public void open() throws IOException, InterruptedException {
+-    Preconditions.checkState(curSink == null,
+-        "Attempting to open already open RollSink '" + fspec + "'");
+-    LOG.info("opening RollSink  '" + fspec + "'");
+-    trigger.getTagger().newTag();
+-    triggerThread = new TriggerThread();
+-    triggerThread.doStart();
+-
++  public void open() throws IOException, InterruptedException {
++    lock.writeLock().lock();
+     try {
+-      curSink = newSink(ctx);
+-      curSink.open();
+-    } catch (IOException e1) {
+-      LOG.warn("Failure when attempting to open initial sink", e1);
++      if (executor != null) {
++        throw new IllegalStateException(
++            "Attempting to open already open roll sink");
++      }
++      executor = Executors.newFixedThreadPool(1);
++
++      Preconditions.checkState(curSink == null,
++          "Attempting to open already open RollSink '" + fspec + "'");
++      LOG.info("opening RollSink  '" + fspec + "'");
++      trigger.getTagger().newTag();
++      triggerThread = new TriggerThread();
++      triggerThread.doStart();
++    
++      try {
++        curSink = newSink(ctx);
++        curSink.open();
++      } catch (IOException e1) {
++        LOG.warn("Failure when attempting to open initial sink", e1);
++        executor.shutdown();
++        executor = null;
++      }
++    } finally {
++      lock.writeLock().unlock();
+     }
+   }
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriver.java b/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriver.java
+index 83d2785..63a0e38 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriver.java
++++ b/flume-core/src/test/java/com/cloudera/flume/core/connector/TestDirectDriver.java
+@@ -26,6 +26,8 @@ import static org.mockito.Mockito.mock;
+ import java.io.IOException;
+ 
+ import org.junit.Test;
++import org.slf4j.Logger;
++import org.slf4j.LoggerFactory;
+ 
+ import com.cloudera.flume.conf.Context;
+ import com.cloudera.flume.conf.ReportTestingContext;
+@@ -46,10 +48,12 @@ import com.cloudera.util.CappedExponentialBackoff;
+ import com.cloudera.util.Clock;
+ 
+ /**
+- * This tests the open, close, execution, shutdown and cancellation sematnics of
++ * This tests the open, close, execution, shutdown and cancellation semantics of
+  * the direct driver
+  */
+ public class TestDirectDriver {
++  Logger LOG = LoggerFactory.getLogger(TestDirectDriver.class);
++  
+   /**
+    * Test a thread cancel on something blocked on open. This forces a
+    * InterruptedException throw. Normally an insistentOpen will never return if
+@@ -138,7 +142,7 @@ public class TestDirectDriver {
+   }
+ 
+   /**
+-   * This checks to make sure that even though there is along roll period, the
++   * This checks to make sure that even though there is a long roll period, the
+    * sink exits quickly due to the cancel call.
+    */
+   @Test
+@@ -173,14 +177,18 @@ public class TestDirectDriver {
+ 
+     DirectDriver driver = new DirectDriver(source, roll);
+     driver.start();
++    LOG.info("Started driver");
+     Clock.sleep(1000); // let the insistent append try a few times.
++    LOG.info("About to to trigger stop");
+     driver.stop();
+ 
++
+     boolean closed = driver.join(1000);
+     assertFalse(closed);
++    LOG.info("Stop suggestion wasn't successful, now try to cancel");
+ 
+     driver.cancel();
+-    assertTrue(driver.join(1000)); // closed this time.
++    assertTrue(driver.join(5000)); // closed this time.
+   }
+ 
+   /**
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+index 5b24e5c..a9ae258 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+@@ -21,9 +21,14 @@ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.assertNull;
+ import static org.junit.Assert.assertTrue;
++import static org.mockito.Mockito.doNothing;
++import static org.mockito.Mockito.doThrow;
++import static org.mockito.Mockito.mock;
+ 
+ import java.io.File;
+ import java.io.IOException;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.TimeUnit;
+ 
+ import org.apache.log4j.Level;
+ import org.codehaus.jettison.json.JSONException;
+@@ -35,7 +40,10 @@ import org.slf4j.LoggerFactory;
+ import com.cloudera.flume.conf.Context;
+ import com.cloudera.flume.conf.FlumeBuilder;
+ import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.flume.conf.LogicalNodeContext;
+ import com.cloudera.flume.conf.ReportTestingContext;
++import com.cloudera.flume.conf.SinkFactory.SinkBuilder;
++import com.cloudera.flume.conf.SinkFactoryImpl;
+ import com.cloudera.flume.core.Attributes;
+ import com.cloudera.flume.core.Event;
+ import com.cloudera.flume.core.EventImpl;
+@@ -159,20 +167,20 @@ public class TestRollSink {
+ 
+     snk.open();
+     Clock.sleep(100); // sleep until about 100 ms; no flush yet.
+-    assertEquals(Long.valueOf(0), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(0),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     Clock.sleep(200); // auto flush
+-    assertEquals(Long.valueOf(1), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(1),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     Clock.sleep(200); // auto flush.
+-    assertEquals(Long.valueOf(2), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(2),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     Clock.sleep(200); // auto flush.
+-    assertEquals(Long.valueOf(3), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(3),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+     snk.close();
+   }
+ 
+@@ -188,42 +196,42 @@ public class TestRollSink {
+ 
+     snk.open();
+ 
+-    assertEquals(Long.valueOf(0), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(0),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     // a 10 byte body
+     Event e = new EventImpl("0123456789".getBytes());
+     snk.append(e);
+     Clock.sleep(200); // at least one check period
+-    assertEquals(Long.valueOf(1), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(1),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     // 5 bytes (no trigger)
+     e = new EventImpl("01234".getBytes());
+     snk.append(e);
+     Clock.sleep(200); // at least one check period
+-    assertEquals(Long.valueOf(1), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(1),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+     // 5 more bytes (ok trigger)
+     e = new EventImpl("01234".getBytes());
+     snk.append(e);
+     Clock.sleep(200); // at least one check period
+-    assertEquals(Long.valueOf(2), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(2),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     // 27 bytes but only on trigger
+     e = new EventImpl("012345678901234567890123456".getBytes());
+     snk.append(e);
+     Clock.sleep(200); // at least one check period
+-    assertEquals(Long.valueOf(3), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(3),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     // 5 bytes (no trigger)
+     e = new EventImpl("01234".getBytes());
+     snk.append(e);
+     Clock.sleep(200); // at least one check period
+-    assertEquals(Long.valueOf(3), snk.getMetrics().getLongMetric(
+-        RollSink.A_ROLLS));
++    assertEquals(Long.valueOf(3),
++        snk.getMetrics().getLongMetric(RollSink.A_ROLLS));
+ 
+     snk.close();
+   }
+@@ -261,4 +269,79 @@ public class TestRollSink {
+     snk.close();
+   }
+ 
++  /**
++   * This test has an append that is blocked because a sink inside of a roll
++   * always throws an exception. (ex: a down network connection). This test
++   * attempts to guarantee that the rotate succeeds in a reasoanble amoutn of
++   * time.
++   *
++   * @throws IOException
++   * @throws InterruptedException
++   */
++  @Test
++  public void testRollAppendBlockedDeadlock() throws IOException,
++      InterruptedException {
++    final EventSink mock = mock(EventSink.Base.class);
++    doNothing().doThrow(new IOException()).when(mock).close();
++    final Event e1 = new EventImpl("foo1".getBytes());
++    final Event e2 = new EventImpl("foo2".getBytes());
++    doThrow(new IOException()).when(mock).append(e1);
++    doThrow(new IOException()).when(mock).append(e2);
++
++    SinkFactoryImpl sfi = new SinkFactoryImpl();
++    sfi.setSink("rollLock", new SinkBuilder() {
++      @Override
++      public EventSink build(Context context, String... argv) {
++        return mock;
++      }
++    });
++    FlumeBuilder.setSinkFactory(sfi);
++
++    final RollSink roll = new RollSink(LogicalNodeContext.testingContext(),
++        "insistentOpen stubbornAppend insistentAppend rollLock", 1000000,
++        1000000);
++    final CountDownLatch latch = new CountDownLatch(1);
++    // excessively long roll and check times which allow test to force checks.
++    Thread t = new Thread("blocked append thread") {
++      public void run() {
++        try {
++          roll.open();
++          roll.append(e1); // append blocks.
++        } catch (InterruptedException e) {
++          latch.countDown();
++          LOG.error("Exited with expected Exception");
++          return;
++        } catch (IOException e) {
++          LOG.info("Got the unexpected IOException exit", e);
++          e.printStackTrace();
++        }
++        LOG.info("Got the unexpected clean exit");
++      }
++    };
++    t.start();
++    // have another thread timeout.
++    final CountDownLatch latch2 = new CountDownLatch(1);
++    Thread t2 = new Thread("roll rotate thread") {
++      public void run() {
++        try {
++          Clock.sleep(1000); // this is imperfect, but wait for append to block.
++          roll.rotate();
++          roll.close();
++        } catch (IOException e) {
++          e.printStackTrace();
++        } catch (InterruptedException e) {
++          e.printStackTrace();
++        } finally {
++          latch2.countDown();
++        }
++      }
++    };
++    t2.start();
++    boolean success = latch.await(5, TimeUnit.SECONDS);
++    assertTrue(success);
++
++    success = latch2.await(5, TimeUnit.SECONDS);
++    assertTrue(success);
++  }
++
+ }
+-- 
+1.7.0.4
+

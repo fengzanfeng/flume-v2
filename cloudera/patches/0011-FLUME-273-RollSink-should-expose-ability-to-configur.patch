@@ -1,0 +1,276 @@
+From 18be95aba83f33b354c76bfeac15c7545df83e2d Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Sun, 19 Jun 2011 21:50:57 -0700
+Subject: [PATCH 11/65] FLUME-273:  RollSink should expose ability to configure SizeTrigger
+
+---
+ .../java/com/cloudera/flume/conf/FlumeBuilder.java |   31 +++++++---
+ .../cloudera/flume/handlers/rolling/OrTrigger.java |   60 ++++++++++++++++++++
+ .../cloudera/flume/handlers/rolling/RollSink.java  |   51 ++++++++++++++--
+ .../flume/handlers/rolling/TestRollSink.java       |   45 +++++++++++++++
+ 4 files changed, 171 insertions(+), 16 deletions(-)
+ create mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/rolling/OrTrigger.java
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/conf/FlumeBuilder.java b/flume-core/src/main/java/com/cloudera/flume/conf/FlumeBuilder.java
+index b7e6d61..a7025d4 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/conf/FlumeBuilder.java
++++ b/flume-core/src/main/java/com/cloudera/flume/conf/FlumeBuilder.java
+@@ -569,16 +569,29 @@ public class FlumeBuilder {
+     case ROLL: {
+       List<CommonTree> rollArgs = (List<CommonTree>) t.getChildren();
+       try {
+-        Preconditions.checkArgument(rollArgs.size() == 2, "bad parse tree! "
+-            + t.toStringTree() + "roll only takes two arguments");
++        Preconditions.checkArgument(rollArgs.size() >= 2, "bad parse tree! "
++            + t.toStringTree() + "roll requires at least two arguments");
++        SinkBuilder rollBuilder = RollSink.builder();
++        Context ctx = new Context(context); // new scope
++        List<Object> args = new ArrayList<Object>();
++
++        // first is the sub sink spec
+         CommonTree ctbody = rollArgs.get(0);
+-        // TODO change long args into Long instead of String
+-        Long period = Long
+-            .parseLong(buildSimpleArg(rollArgs.get(1)).toString());
+-        String body = FlumeSpecGen.genEventSink(ctbody);
+-        // TODO (jon) replace the hard coded 250 with a parameterizable value
+-        RollSink roller = new RollSink(context, body, period, 250);
+-        return roller;
++        String body= FlumeSpecGen.genEventSink(ctbody);
++        args.add(body);
++
++        // all others are args
++        for (int i =1; i< rollArgs.size(); i++) {
++          CommonTree tr = rollArgs.get(i);
++          Object arg = buildSimpleArg(tr);
++          if (arg != null) {
++            args.add(arg);
++          } else {
++            Pair<String, CommonTree> kwarg = buildKWArg(tr);
++            ctx.putObj(kwarg.getLeft(), buildSimpleArg(kwarg.getRight()));
++          }
++        }
++        return rollBuilder.create(ctx, args.toArray());
+       } catch (IllegalArgumentException iae) {
+         throw new FlumeSpecException(iae.getMessage());
+       }
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/OrTrigger.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/OrTrigger.java
+new file mode 100644
+index 0000000..dce5df4
+--- /dev/null
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/OrTrigger.java
+@@ -0,0 +1,60 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.rolling;
++
++import com.cloudera.flume.core.Event;
++
++public class OrTrigger implements RollTrigger {
++  final RollTrigger[] triggers;
++  Tagger tagger;
++
++  public OrTrigger(Tagger tagger, RollTrigger... triggers) {
++    this.triggers = triggers;
++    this.tagger = tagger;
++  }
++
++  @Override
++  public boolean isTriggered() {
++    for (RollTrigger t : triggers) {
++      if (t.isTriggered()) {
++        return true;
++      }
++    }
++    return false;
++  }
++
++  @Override
++  public void append(Event e) {
++    for (RollTrigger t : triggers) {
++      t.append(e);
++    }
++  }
++
++  @Override
++  public Tagger getTagger() {
++    return tagger;
++  }
++
++  @Override
++  public void reset() {
++    for (RollTrigger t : triggers) {
++      t.reset();
++    }
++  }
++
++}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+index a9d81f4..32a3411 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+@@ -37,6 +37,7 @@ import org.slf4j.LoggerFactory;
+ import com.cloudera.flume.conf.Context;
+ import com.cloudera.flume.conf.FlumeBuilder;
+ import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.flume.conf.FlumeBuilder.FunctionSpec;
+ import com.cloudera.flume.conf.SinkFactory.SinkBuilder;
+ import com.cloudera.flume.core.CompositeSink;
+ import com.cloudera.flume.core.Event;
+@@ -55,6 +56,7 @@ import com.google.common.base.Preconditions;
+  */
+ public class RollSink extends EventSink.Base {
+   static final Logger LOG = LoggerFactory.getLogger(RollSink.class);
++  public static final String C_TRIGGER = "trigger";
+ 
+   final String fspec;
+   EventSink curSink;
+@@ -414,34 +416,69 @@ public class RollSink extends EventSink.Base {
+     return trigger.getTagger().getTag();
+   }
+ 
++  public static RollTrigger createRollTrigger(Context ctx, long rollmillis) {
++    RollTrigger rt = null;
++    FunctionSpec fs = ctx.getObj(C_TRIGGER, FunctionSpec.class);
++    if (fs == null) {
++      rt = new TimeTrigger(new ProcessTagger(), rollmillis);
++    } else {
++      if ("time".equals(fs.getName())) {
++        rt = new TimeTrigger(new ProcessTagger(), rollmillis);
++      } else if ("size".equals(fs.getName())) {
++        Tagger t = new ProcessTagger();
++        Preconditions.checkArgument(fs.getArgs().length == 1,
++            "size trigger requires argument");
++        long sz = Long.parseLong(fs.getArgs()[0].toString());
++        rt = new OrTrigger(t, new TimeTrigger(t, rollmillis), new SizeTrigger(
++            sz, t));
++      } else {
++        throw new IllegalArgumentException("Illegal trigger type specified: "
++            + fs.getName());
++      }
++    }
++    return rt;
++  }
++
+   /**
+    * Builder for a spec based rolling sink. (most general version, does not
+    * necessarily output to files!).
++   *
++   * Note: trigger is in context so can be set from any parent source such as
++   * collectorSink
+    */
+   public static SinkBuilder builder() {
+     return new SinkBuilder() {
+       @Override
+-      public EventSink build(Context ctx, String... argv) {
++      public EventSink create(Context ctx, Object... argv) {
+         Preconditions.checkArgument(argv.length >= 2 && argv.length <= 3,
+-            "roll(rollmillis[, checkmillis]) { sink }");
+-        String spec = argv[0];
+-        long rollmillis = Long.parseLong(argv[1]);
++            "roll(rollmillis[, checkmillis]{, trigger=time|size(n)}) { sink }");
++        String spec = argv[0].toString();
++        long rollmillis = Long.parseLong(argv[1].toString());
+ 
+-        long checkmillis = 250; // TODO (jon) parameterize 250 argument.
++        long checkmillis = 250;
+         if (argv.length >= 3) {
+-          checkmillis = Long.parseLong(argv[2]);
++          checkmillis = Long.parseLong(argv[2].toString());
+         }
+ 
++        RollTrigger rt = createRollTrigger(ctx, rollmillis);
++
+         try {
+           // check sub spec to make sure it works.
+           FlumeBuilder.buildSink(ctx, spec);
+ 
+           // ok it worked, instantiate the roller
+-          return new RollSink(ctx, spec, rollmillis, checkmillis);
++          return new RollSink(ctx, spec, rt, checkmillis);
+         } catch (FlumeSpecException e) {
+           throw new IllegalArgumentException("Failed to parse/build " + spec, e);
+         }
+       }
++
++      @Deprecated
++      @Override
++      public EventSink build(Context ctx, String... argv) {
++        throw new RuntimeException(
++            "Old sink builder for RollSink should not be exercised");
++      }
+     };
+   }
+ }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+index a9ae258..1fd788f 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/rolling/TestRollSink.java
+@@ -344,4 +344,49 @@ public class TestRollSink {
+     assertTrue(success);
+   }
+ 
++  @Test
++  public void testTriggerKWArg() throws FlumeSpecException {
++    FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(1000, trigger=time) { null }");
++    FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(1000, trigger=size(1000)) { null }");
++  }
++
++  @Test(expected = FlumeSpecException.class)
++  public void testBadTriggerKWArgType() throws FlumeSpecException {
++    FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(1000, trigger=foo) { null }");
++  }
++
++  @Test(expected = FlumeSpecException.class)
++  public void testBadMissingTimeTriggerKWArg() throws FlumeSpecException {
++    FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(trigger=size(100)) { null }");
++  }
++
++  @Test(expected = FlumeSpecException.class)
++  public void testBadTriggerKWArgArg() throws FlumeSpecException {
++    FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(1000, trigger=size(\"badarg\")) { null }");
++  }
++
++  @Test
++  public void testSizeTriggerFunctional() throws FlumeSpecException,
++      IOException, InterruptedException {
++    // a ridiculous amount of time trigger time to forces size trigger
++    EventSink snk = FlumeBuilder.buildSink(LogicalNodeContext.testingContext(),
++        "roll(1000000, trigger=size(10)) { console }");
++    snk.open();
++
++    // Events from this loop:
++    // 0, 1, trigger, 2, 3, trigger, 4, 5, trigger, 6, 7, trigger, 8 ,9,
++    for (int i = 0; i < 10; i++) {
++      snk.append(new EventImpl("6chars".getBytes()));
++    }
++    snk.close();
++
++    ReportEvent rpt = snk.getMetrics();
++    // See above for why there are 4 triggers:
++    assertEquals(4, (long) rpt.getLongMetric(RollSink.A_ROLLS));
++  }
+ }
+-- 
+1.7.0.4
+

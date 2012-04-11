@@ -1,0 +1,126 @@
+From a856427362c0b9b338590669a52c42777584090c Mon Sep 17 00:00:00 2001
+From: Chetan Sarva <chetan@evidon.com>
+Date: Tue, 28 Jun 2011 14:28:28 -0700
+Subject: [PATCH 06/65] FLUME-683: Add input/output buffering to ThriftEventSource/Sink
+
+---
+ .../flume/handlers/thrift/TBufferedSocket.java     |   62 ++++++++++++++++++++
+ .../flume/handlers/thrift/ThriftEventSink.java     |    3 +-
+ .../apache/thrift/transport/TSaneServerSocket.java |    4 +-
+ 3 files changed, 66 insertions(+), 3 deletions(-)
+ create mode 100644 flume-core/src/main/java/com/cloudera/flume/handlers/thrift/TBufferedSocket.java
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/TBufferedSocket.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/TBufferedSocket.java
+new file mode 100644
+index 0000000..bf7a2df
+--- /dev/null
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/TBufferedSocket.java
+@@ -0,0 +1,62 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.thrift;
++
++import java.io.BufferedInputStream;
++import java.io.BufferedOutputStream;
++import java.net.Socket;
++
++import org.apache.thrift.transport.TSocket;
++import org.apache.thrift.transport.TTransportException;
++
++/**
++ * Simple wrapper around {@link TSocket} which adds buffering to the input and
++ * output streams.
++ */
++public class TBufferedSocket extends TSocket {
++
++  public TBufferedSocket(Socket socket) throws TTransportException {
++    super(socket);
++    wrapStreams();
++  }
++
++  public TBufferedSocket(String host, int port, int timeout) {
++    super(host, port, timeout);
++    wrapStreams();
++  }
++
++  public TBufferedSocket(String host, int port) {
++    super(host, port);
++    wrapStreams();
++  }
++
++  @Override
++  public void open() throws TTransportException {
++    super.open();
++    wrapStreams();
++  }
++
++  private void wrapStreams() {
++    if (!isOpen() || inputStream_ == null) {
++      return;
++    }
++    inputStream_ = new BufferedInputStream(inputStream_);
++    outputStream_ = new BufferedOutputStream(outputStream_);
++  }
++
++}
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+index d4937f1..8601e35 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/thrift/ThriftEventSink.java
+@@ -34,7 +34,6 @@ import com.cloudera.flume.conf.Context;
+ import com.cloudera.flume.conf.FlumeConfiguration;
+ import com.cloudera.flume.conf.SinkFactory.SinkBuilder;
+ import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventImpl;
+ import com.cloudera.flume.core.EventSink;
+ import com.cloudera.flume.handlers.thrift.ThriftFlumeEventServer.Client;
+ import com.cloudera.flume.reporter.ReportEvent;
+@@ -101,7 +100,7 @@ public class ThriftEventSink extends EventSink.Base {
+         stats = new TStatsTransport(transport);
+         transport = new TFramedTransport(stats);
+       } else {
+-        transport = new TSocket(host, port, timeout);
++        transport = new TBufferedSocket(host, port, timeout);
+         stats = new TStatsTransport(transport);
+         transport = stats;
+       }
+diff --git a/flume-core/src/main/java/org/apache/thrift/transport/TSaneServerSocket.java b/flume-core/src/main/java/org/apache/thrift/transport/TSaneServerSocket.java
+index ee18b66..679c481 100644
+--- a/flume-core/src/main/java/org/apache/thrift/transport/TSaneServerSocket.java
++++ b/flume-core/src/main/java/org/apache/thrift/transport/TSaneServerSocket.java
+@@ -46,6 +46,8 @@ import java.net.SocketException;
+ import org.slf4j.Logger;
+ import org.slf4j.LoggerFactory;
+ 
++import com.cloudera.flume.handlers.thrift.TBufferedSocket;
++
+ /**
+  * Wrapper around ServerSocket for Thrift.
+  * 
+@@ -130,7 +132,7 @@ public class TSaneServerSocket extends TServerTransport {
+     }
+     try {
+       Socket result = serverSocket_.accept();
+-      TSocket result2 = new TSocket(result);
++      TSocket result2 = new TBufferedSocket(result);
+       result2.setTimeout(clientTimeout_);
+       return result2;
+     } catch (IOException iox) {
+-- 
+1.7.0.4
+

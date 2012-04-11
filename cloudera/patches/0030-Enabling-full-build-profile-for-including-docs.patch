@@ -1,0 +1,33 @@
+From dce2b7b06c8b09543854d16aeb7808836c00c294 Mon Sep 17 00:00:00 2001
+From: Arvind Prabhakar <arvind@cloudera.com>
+Date: Thu, 14 Jul 2011 14:54:58 -0700
+Subject: [PATCH 30/65] Enabling full-build profile for including docs.
+
+---
+ cloudera/do-release-build |    8 ++++----
+ 1 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/cloudera/do-release-build b/cloudera/do-release-build
+index a1d9ebb..f98e628 100755
+--- a/cloudera/do-release-build
++++ b/cloudera/do-release-build
+@@ -68,12 +68,12 @@ else
+   echo $FLUME_GIT_HASH > $BASEDIR/cloudera/flume_git_hash
+ fi
+ 
+-echo
+-echo "WARNING: DOCUMENTATION IS NOT BEING GENERATED!!!!!"
+-echo
++#echo
++#echo "WARNING: DOCUMENTATION IS NOT BEING GENERATED!!!!!"
++#echo
+ 
+ # Add -Pfull-build to include documentation build
+-mvn clean package -Dmaven.revision=${FLUME_GIT_HASH} -Dthrift.executable=${THRIFT_HOME}/bin/thrift -DskipTests ${DO_MAVEN_DEPLOY}
++mvn clean package -Dmaven.revision=${FLUME_GIT_HASH} -Dthrift.executable=${THRIFT_HOME}/bin/thrift -DskipTests -Pfull-build ${DO_MAVEN_DEPLOY}
+ 
+ mkdir build
+ cp flume-distribution/target/flume-distribution-${FULL_VERSION}-project.tar.gz build/flume-${FULL_VERSION}.tar.gz
+-- 
+1.7.0.4
+

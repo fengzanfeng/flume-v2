@@ -1,0 +1,46 @@
+From bebac3d77f3f1b695707121c777858536bca8769 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jmhsieh@apache.org>
+Date: Wed, 17 Aug 2011 14:29:03 +0000
+Subject: [PATCH 39/65] FLUME-742: TestAvroSink fails (Tom White)
+
+Reason: Feature
+Author: Tom White
+Ref: CDH-3329
+
+git-svn-id: https://svn.apache.org/repos/asf/incubator/flume/trunk@1158737 13f79535-47bb-0310-9956-ffa450edef68
+---
+ .../flume/handlers/avro/AvroEventSink.java         |    2 +-
+ .../flume/handlers/avro/TestAvroSinks.java         |    4 +++-
+ 2 files changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+index 0977e91..5fbfbea 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/avro/AvroEventSink.java
+@@ -105,7 +105,7 @@ public class AvroEventSink extends EventSink.Base {
+   public void close() throws IOException {
+     if (transport != null) {
+       transport.close();
+-      transport = null;
++      // we don't null out the transport, so getSentBytes can be called
+       LOG.info("AvroEventSink on port " + port + " closed");
+     } else {
+       LOG.warn("Trying to close AvroEventSink, which was closed already");
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+index 1de67df..d7c5883 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/avro/TestAvroSinks.java
+@@ -216,7 +216,9 @@ public class TestAvroSinks implements ExampleData {
+     tes.close();
+     assertEquals(25 * threads, cnt.getCount());
+     ReportEvent rpt = tes.getMetrics();
+-    assertEquals(2500 * threads, sendByteSum.get());
++    assertTrue("Wire bytes " + sendByteSum.get() +
++        " should exceed total message length",
++        sendByteSum.get() >= 2500 * threads);
+     assertEquals(2500 * threads, rpt.getLongMetric(AvroEventSource.A_BYTES_IN)
+         .longValue());
+     assertEquals(25 * threads, rpt.getLongMetric(AvroEventSource.A_DEQUEUED)
+-- 
+1.7.0.4
+

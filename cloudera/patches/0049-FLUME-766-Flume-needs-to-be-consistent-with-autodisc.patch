@@ -1,0 +1,86 @@
+From 90dfc86bf4c08009e5d064075fe67534e536503c Mon Sep 17 00:00:00 2001
+From: Roman Shaposhnik <rvs@cloudera.com>
+Date: Thu, 22 Sep 2011 13:54:36 -0700
+Subject: [PATCH 49/65] FLUME-766: Flume needs to be consistent with autodiscovery of Hadoop compression codecs
+
+Reason: Bug
+Author: Roman Shaposhnik
+Ref: CDH-1505, CDH-3037
+---
+ bin/flume           |   14 +++++++++++---
+ bin/flume-daemon.sh |    7 ++++---
+ 2 files changed, 15 insertions(+), 6 deletions(-)
+
+diff --git a/bin/flume b/bin/flume
+index 476cdee..1b6f9df 100755
+--- a/bin/flume
++++ b/bin/flume
+@@ -24,6 +24,13 @@
+ # TODO (jon) This assumes CLASSPATH has $JAVA_HOME/lib/tools.jar in it
+ # (jetty requires this to compile jsps.  In future will precompile
+ # jsps to make this requirement go away.)
++#
++# This scripts honors the folling env variables:
++#   FLUME_PID_DIR      -- subdirectory where PID files 
++#                            flume-$FLUME_IDENT_STRING-master.pid
++#                         will be deposited
++#   FLUME_IDENT_STRING -- a unique qualifier for the process owning the PID
++#                         typically a user name running the process
+ 
+ function usage {
+   echo "usage: flume command [args...]"
+@@ -58,7 +65,8 @@ CMDPATH=`dirname $CMDPATH`
+ 
+ FLUME=$CMDPATH/bin/flume
+ 
+-MASTERPID=${FLUME_PID_DIR:="/tmp"}/flumemaster.pid
++MASTERPID=${FLUME_PID_DIR:="/tmp"}/flume-$FLUME_IDENT_STRING-master.pid
++NODEPID=${FLUME_PID_DIR:="/tmp"}/flume-$FLUME_IDENT_STRING-node.pid
+ 
+ CMD="$1"
+ if [ -z "$CMD" ]; then
+@@ -234,8 +242,8 @@ WATCHDOG_CLASS=com.cloudera.flume.watchdog.FlumeWatchdog
+ MASTER_WATCHDOG="java ${JOPTS} -Dpid=$$ -Dpidfile=$MASTERPID $WATCHDOG_CLASS"
+ MASTERI_WATCHDOG="java ${JOPTS} -Dpid=$$ -Dpidfile=$MASTERPID  $WATCHDOG_CLASS"
+ 
+-NODE_WATCHDOG="java ${JOPTS} -Dpid=$$ -Dpidfile=${FLUME_PID_DIR}/flumenode-$$.pid $WATCHDOG_CLASS"
+-NODEI_WATCHDOG="java ${JOPTS} -Dfwdstdin=true -Dpid=$$ -Dpidfile=${FLUME_PID_DIR}/flumenode-$$.pid $WATCHDOG_CLASS"
++NODE_WATCHDOG="java ${JOPTS} -Dpid=$$ -Dpidfile=$NODEPID $WATCHDOG_CLASS"
++NODEI_WATCHDOG="java ${JOPTS} -Dfwdstdin=true -Dpid=$$ -Dpidfile=$NODEPID $WATCHDOG_CLASS"
+ 
+ if [ -n "$FLUME_VERBOSE" ]; then
+     if [ -n "$FLUME_VERBOSE_JAVA" ]; then
+diff --git a/bin/flume-daemon.sh b/bin/flume-daemon.sh
+index 71d5a77..f4624fb 100755
+--- a/bin/flume-daemon.sh
++++ b/bin/flume-daemon.sh
+@@ -66,7 +66,7 @@ if [ "$FLUME_NICENESS" = "" ]; then
+ fi 
+ 
+ if [ "$FLUME_PID_DIR" = "" ]; then
+-  FLUME_PID_DIR=/var/run/flume
++  export FLUME_PID_DIR=/var/run/flume
+ fi
+ 
+ if [ "$FLUME_IDENT_STRING" = "" ]; then
+@@ -89,14 +89,15 @@ case $startStop in
+       if kill -0 `cat $pid` > /dev/null 2>&1; then
+         echo $command running as process `cat $pid`.  Stop it first.
+         exit 1
++      else # must be a stale PID file
++        rm -f $pid
+       fi
+     fi
+ 
+     flume_rotate_log $log
+-    echo starting $command, logging to $log
++    echo starting $command, logging to $FLUME_LOG_DIR/$FLUME_LOGFILE
+     cd "$FLUME_HOME"
+     nohup  nice -n ${FLUME_NICENESS} "${FLUME_HOME}"/bin/flume $command "$@" > "$log" 2>&1 < /dev/null &
+-    echo $! > $pid
+     sleep 1; head "$log"
+     ;;
+           
+-- 
+1.7.0.4
+

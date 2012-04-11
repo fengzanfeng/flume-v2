@@ -1,0 +1,26 @@
+From c4e4a17427132771a8cab7c0de1b45eadfef3a33 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Sat, 2 Jul 2011 14:20:47 -0700
+Subject: [PATCH 18/65] FLUME-697: ExecNioSource has an unbounded queue that can cause OOME
+
+---
+ .../flume/handlers/exec/ExecNioSource.java         |    3 ++-
+ 1 files changed, 2 insertions(+), 1 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/exec/ExecNioSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/exec/ExecNioSource.java
+index 3be1754..f14f774 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/exec/ExecNioSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/exec/ExecNioSource.java
+@@ -66,7 +66,8 @@ public class ExecNioSource extends EventSource.Base {
+   private final AtomicBoolean errFinished = new AtomicBoolean(false);
+   private final AtomicBoolean outFinished = new AtomicBoolean(false);
+ 
+-  private final BlockingQueue<Event> eventQueue = new LinkedBlockingQueue<Event>();
++  private final BlockingQueue<Event> eventQueue = new LinkedBlockingQueue<Event>(
++      1000);
+ 
+   private static Logger LOG = LoggerFactory.getLogger(ExecNioSource.class);
+ 
+-- 
+1.7.0.4
+

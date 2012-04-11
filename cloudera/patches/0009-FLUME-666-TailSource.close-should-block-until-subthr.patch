@@ -1,0 +1,169 @@
+From dbb37697e41963dfd50a0a66641277d1a64279a3 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Fri, 17 Jun 2011 17:53:52 -0700
+Subject: [PATCH 09/65] FLUME-666: TailSource.close should block until subthread is closed.
+
+---
+ .../flume/handlers/text/TailDirSource.java         |    5 +-
+ .../cloudera/flume/handlers/text/TailSource.java   |   17 ++++--
+ .../flume/handlers/text/TestTailDirSource.java     |    2 +-
+ .../flume/handlers/text/TestTailSource.java        |   56 ++++++++++++++++++++
+ 4 files changed, 72 insertions(+), 8 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailDirSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailDirSource.java
+index 29855a0..00bf390 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailDirSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailDirSource.java
+@@ -240,9 +240,10 @@ public class TailDirSource extends EventSource.Base {
+ 
+   /**
+    * Must be synchronized to isolate watcher
++   * @throws InterruptedException
+    */
+   @Override
+-  synchronized public void close() throws IOException {
++  synchronized public void close() throws IOException, InterruptedException {
+     tail.close();
+     this.watcher.stop();
+     this.watcher = null;
+@@ -264,7 +265,7 @@ public class TailDirSource extends EventSource.Base {
+   }
+ 
+   @Override
+-  public Event next() throws IOException {
++  public Event next() throws IOException, InterruptedException {
+     // this cannot be in synchronized because it has a
+     // blocking call to a queue inside it.
+     Event e = tail.next();
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailSource.java b/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailSource.java
+index a0da19c..512d236 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailSource.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/text/TailSource.java
+@@ -199,7 +199,7 @@ public class TailSource extends EventSource.Base {
+         }
+         LOG.debug("Tail got done flag");
+       } catch (InterruptedException e) {
+-        LOG.error("tail unexpected interrupted: " + e.getMessage(), e);
++        LOG.error("Tail thread nterrupted: " + e.getMessage(), e);
+       } finally {
+         LOG.info("TailThread has exited");
+       }
+@@ -244,9 +244,17 @@ public class TailSource extends EventSource.Base {
+   }
+ 
+   @Override
+-  public void close() throws IOException {
++  public void close() throws IOException, InterruptedException {
+     synchronized (this) {
+       done = true;
++      if (thd == null) {
++        LOG.warn("TailSource double closed");
++        return;
++      }
++      while (thd.isAlive() ){
++        thd.join(100L);
++        thd.interrupt();
++      }
+       thd = null;
+     }
+   }
+@@ -256,7 +264,7 @@ public class TailSource extends EventSource.Base {
+    * is reached.
+    */
+   @Override
+-  public Event next() throws IOException {
++  public Event next() throws IOException, InterruptedException {
+     try {
+       while (!done) {
+         // This blocks on the synchronized queue until a new event arrives.
+@@ -269,8 +277,7 @@ public class TailSource extends EventSource.Base {
+       return null; // closed
+     } catch (InterruptedException e1) {
+       LOG.warn("next unexpectedly interrupted :" + e1.getMessage(), e1);
+-      Thread.currentThread().interrupt();
+-      throw new IOException(e1.getMessage());
++      throw e1;
+     }
+   }
+ 
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailDirSource.java b/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailDirSource.java
+index b731a2c..afe91d1 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailDirSource.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailDirSource.java
+@@ -59,7 +59,7 @@ public class TestTailDirSource {
+   }
+ 
+   @Test
+-  public void testOpenClose() throws IOException {
++  public void testOpenClose() throws IOException, InterruptedException {
+     File tmpdir = FileUtil.mktempdir();
+     TailDirSource src = new TailDirSource(tmpdir, ".*");
+     for (int i = 0; i < 20; i++) {
+diff --git a/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailSource.java b/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailSource.java
+index 2c7f119..86d3f69 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailSource.java
++++ b/flume-core/src/test/java/com/cloudera/flume/handlers/text/TestTailSource.java
+@@ -542,4 +542,60 @@ public class TestTailSource {
+      * (((CounterSink) sink).getCount() - 1000) < 50);
+      */
+   }
++
++  @Test
++  public void testCloseBlocksUntilThreadDone() throws InterruptedException {
++    final CountDownLatch start = new CountDownLatch(1);
++    final CountDownLatch done1 = new CountDownLatch(1);
++    final CountDownLatch done2 = new CountDownLatch(1);
++
++    // count # of active threads before, we should have the same number after
++    int threads = Thread.activeCount();
++
++    // 10000s wait when backing off (needs to be interrupted to exit reasonably)
++    final TailSource src = new TailSource(10000000);
++    Thread t = new Thread() {
++      @Override
++      public void run() {
++        try {
++          src.open();
++          start.countDown();
++          src.next();
++        } catch (Throwable t) {
++          LOG.error("Test failed because exception thrown");
++          return; // this is a failure path
++        }
++        done1.countDown();
++
++      }
++    };
++    t.start();
++
++    Thread t2 = new Thread() {
++      @Override
++      public void run() {
++        try {
++          if (!start.await(1000, TimeUnit.MILLISECONDS)) {
++            return;
++          }
++          Clock.sleep(150); // wait next call to start
++          src.close();
++        } catch (Throwable t) {
++          LOG.error("Test failed because exception thrown");
++          return;
++        }
++        done2.countDown();
++
++      }
++    };
++    t2.start();
++
++    // make sure both threads did stuff
++    assertTrue(done1.await(3, TimeUnit.SECONDS));
++    assertTrue(done2.await(3, TimeUnit.SECONDS));
++
++    // if close doesn't block until subthread is done, there will a leaked
++    // thread!
++    assertEquals(threads, Thread.activeCount());
++  }
+ }
+-- 
+1.7.0.4
+

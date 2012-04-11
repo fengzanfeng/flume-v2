@@ -1,0 +1,193 @@
+From 926733bf4c551175246bb887f43db50bad371a64 Mon Sep 17 00:00:00 2001
+From: Prasad Mujumdar <prasadm@cloudera.com>
+Date: Fri, 16 Dec 2011 15:58:44 -0800
+Subject: [PATCH 61/65] CDH-3884, backport Flume-857
+
+---
+ .../cloudera/flume/core/EventSinkDecorator.java    |    8 +-
+ .../flume/handlers/debug/StubbornAppendSink.java   |    8 +-
+ .../cloudera/flume/handlers/rolling/RollSink.java  |    6 +-
+ .../flume/collector/TestCollectorSink.java         |   99 ++++++++++++++++++++
+ 4 files changed, 116 insertions(+), 5 deletions(-)
+
+diff --git a/flume-core/src/main/java/com/cloudera/flume/core/EventSinkDecorator.java b/flume-core/src/main/java/com/cloudera/flume/core/EventSinkDecorator.java
+index 6ab39ba..7792040 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/core/EventSinkDecorator.java
++++ b/flume-core/src/main/java/com/cloudera/flume/core/EventSinkDecorator.java
+@@ -64,8 +64,12 @@ public class EventSinkDecorator<S extends EventSink> extends EventSink.Base {
+   @Override
+   public void close() throws IOException, InterruptedException {
+     Preconditions.checkNotNull(sink);
+-    sink.close();
+-    isOpen.set(false);
++    try {
++      sink.close();
++    } finally {
++      // mark it closed regardless the downstream close exception
++      isOpen.set(false);
++    }
+   }
+ 
+   @Override
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/debug/StubbornAppendSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/debug/StubbornAppendSink.java
+index 9436eb4..98d5690 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/debug/StubbornAppendSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/debug/StubbornAppendSink.java
+@@ -82,8 +82,12 @@ public class StubbornAppendSink<S extends EventSink> extends
+       LOG.info("append failed on event '{}' with error: {}", e, ex.getMessage());
+ 
+       appendFails.incrementAndGet();
+-      super.close(); // close
+-
++      try {
++        super.close(); // close
++      } catch (IOException eI) {
++        // Ignore the IOexception in close and continue to reopen
++        LOG.error("Error in closing Stubborn Append Sink" , eI);
++      }
+       open(); // attempt to reopen
+       super.append(e); // resend
+       appendSuccesses.incrementAndGet();
+diff --git a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+index 27302b1..ce3e862 100644
+--- a/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
++++ b/flume-core/src/main/java/com/cloudera/flume/handlers/rolling/RollSink.java
+@@ -329,8 +329,12 @@ public class RollSink extends EventSink.Base {
+         return;
+       }
+       curSink.close();
+-      curSink = null;
+     } finally {
++      /* If the downstream sink throws an exception while closing, then its state
++       * is unknown. We want to play safe and remove its reference.from the roller
++       * so that the flow can continue.
++       */
++      curSink = null;
+       lock.writeLock().unlock();
+     }
+   }
+diff --git a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+index 4f25f58..e735f38 100644
+--- a/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
++++ b/flume-core/src/test/java/com/cloudera/flume/collector/TestCollectorSink.java
+@@ -22,13 +22,18 @@ import static org.junit.Assert.assertNotNull;
+ import static org.junit.Assert.assertTrue;
+ import static org.mockito.Matchers.anyObject;
+ import static org.mockito.Mockito.doThrow;
++import static org.mockito.Mockito.doNothing;
+ import static org.mockito.Mockito.mock;
++import org.mockito.invocation.InvocationOnMock;
++import org.mockito.stubbing.Answer;
+ 
+ import java.io.File;
+ import java.io.FileFilter;
+ import java.io.IOException;
+ import java.util.Date;
+ import java.util.HashSet;
++import java.util.LinkedList;
++import java.util.List;
+ import java.util.Set;
+ import java.util.concurrent.CountDownLatch;
+ import java.util.concurrent.TimeUnit;
+@@ -917,4 +922,98 @@ public class TestCollectorSink {
+       FileUtil.rmr(f);
+     }
+   }
++
++  /**
++   * This test verifies that when both append and close throw an exception
++   * the retry mechanism (stubborn append) reopens the sink and continues
++   * to flow event to the sink correctly
++   */
++  @SuppressWarnings("rawtypes")
++  @Test(timeout=5000)
++  public void testAppendCloseIOExceptionSink() throws IOException,
++      InterruptedException, FlumeSpecException {
++    final EventSink snk = mock(EventSink.class);
++    final List<String> result = new LinkedList<String> ();
++
++    // mock append that throws IOException on first invocation and
++    // then sets an attribute on second time
++    doThrow(new IOException("Force unexpected append error")).
++      doAnswer(new Answer () {
++        @Override
++        public Object answer(InvocationOnMock aInvocation)
++            throws Throwable {
++          result.add("success"); // append executed by retry sinks
++          return null;
++        }}).
++        when(snk).append((Event) anyObject());
++
++    doThrow(new IOException("Force unexpected close error")).doNothing().
++        when(snk).close();
++
++    doNothing().when(snk).open();
++    SinkBuilder sb = new SinkBuilder() {
++      @Override
++      public EventSink build(Context context, String... argv) {
++        return snk;
++      }
++    };
++    SinkFactoryImpl sf = new SinkFactoryImpl();
++    sf.setSink("mIOSink", sb);
++    FlumeBuilder.setSinkFactory(sf);
++
++    final EventSink coll = FlumeBuilder.buildSink(
++        LogicalNodeContext.testingContext(), "collector(5000) { mIOSink }");
++    coll.open();
++    coll.append(new EventImpl("foo".getBytes()));
++    coll.close();
++    assertEquals(result.get(0), "success");
++  }
++
++  /**
++  *
++  * This test verifies that when both append and close throw multiple
++  * consecutive exceptions, the retry mechanism (insistent append)
++  * reopens the sink and continues to flow event to the sink correctly
++  */
++ @SuppressWarnings("rawtypes")
++ @Test
++ public void testMultiAppendCloseIOExceptionSink() throws IOException,
++     InterruptedException, FlumeSpecException {
++   final EventSink snk = mock(EventSink.class);
++   final List<String> result = new LinkedList<String> ();
++
++   // mock append that throws IOException on first two invocation and
++   // then sets an attribute on third time
++   doThrow(new IOException("Force unexpected append error")).
++     doThrow(new IOException("Force unexpected append error")).
++     doAnswer(new Answer () {
++       @Override
++       public Object answer(InvocationOnMock aInvocation)
++           throws Throwable {
++         result.add("success"); // append executed by retry sinks
++         return null;
++       }}).
++       when(snk).append((Event) anyObject());
++
++   doThrow(new IOException("Force unexpected close error")).
++     doNothing().when(snk).close();
++
++   doNothing().when(snk).open();
++   SinkBuilder sb = new SinkBuilder() {
++     @Override
++     public EventSink build(Context context, String... argv) {
++       return snk;
++     }
++   };
++   SinkFactoryImpl sf = new SinkFactoryImpl();
++   sf.setSink("mIOSink", sb);
++   FlumeBuilder.setSinkFactory(sf);
++
++   final EventSink coll = FlumeBuilder.buildSink(
++       LogicalNodeContext.testingContext(), "collector(5000) { mIOSink }");
++   coll.open();
++   coll.append(new EventImpl("foo".getBytes()));
++   coll.close();
++   assertEquals(result.get(0), "success");
++ }
+ }
+-- 
+1.7.0.4
+

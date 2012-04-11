@@ -1,0 +1,3327 @@
+From 33e0157446132c7b48214f7bb0d9c3795a040173 Mon Sep 17 00:00:00 2001
+From: Jonathan Hsieh <jon@cloudera.com>
+Date: Wed, 22 Jun 2011 17:47:43 -0700
+Subject: [PATCH 13/65] FLUME-603: Move to flume-microbenchmarks dir
+
+---
+ .../java/com/cloudera/flume/ExamplePerfData.java   |   30 +++
+ .../test/java/com/cloudera/flume/PerfDiskIO.java   |   94 +++++++
+ .../com/cloudera/flume/PerfGrepReportSinks.java    |   76 ++++++
+ .../test/java/com/cloudera/flume/PerfHdfsIO.java   |  115 +++++++++
+ .../java/com/cloudera/flume/PerfReportSinks.java   |  133 ++++++++++
+ .../test/java/com/cloudera/flume/PerfSamplers.java |  164 +++++++++++++
+ .../java/com/cloudera/flume/PerfSyslogFormats.java |   86 +++++++
+ .../java/com/cloudera/flume/PerfThriftSinks.java   |  218 +++++++++++++++++
+ .../cloudera/flume/agent/BenchmarkAgentDecos.java  |   74 ++++++
+ .../cloudera/flume/agent/BenchmarkBasicDecos.java  |   48 ++++
+ .../handlers/syslog/PerfSyslogWireExtract.java     |  255 ++++++++++++++++++++
+ .../com/cloudera/testio/PerfStringAppends.java     |  148 +++++++++++
+ .../java/com/cloudera/testio/PerfStringTrans.java  |  113 +++++++++
+ .../com/cloudera/flume/ExamplePerfData.java        |   30 ---
+ src/javaperf/com/cloudera/flume/PerfDiskIO.java    |   94 -------
+ .../com/cloudera/flume/PerfGrepReportSinks.java    |   76 ------
+ src/javaperf/com/cloudera/flume/PerfHdfsIO.java    |  115 ---------
+ .../com/cloudera/flume/PerfReportSinks.java        |  133 ----------
+ src/javaperf/com/cloudera/flume/PerfSamplers.java  |  164 -------------
+ .../com/cloudera/flume/PerfSyslogFormats.java      |   86 -------
+ .../com/cloudera/flume/PerfThriftSinks.java        |  218 -----------------
+ .../cloudera/flume/agent/BenchmarkAgentDecos.java  |   74 ------
+ .../cloudera/flume/agent/BenchmarkBasicDecos.java  |   48 ----
+ .../handlers/syslog/PerfSyslogWireExtract.java     |  255 --------------------
+ .../com/cloudera/testio/PerfStringAppends.java     |  148 -----------
+ .../com/cloudera/testio/PerfStringTrans.java       |  113 ---------
+ 26 files changed, 1554 insertions(+), 1554 deletions(-)
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringAppends.java
+ create mode 100644 flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringTrans.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/ExamplePerfData.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfDiskIO.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfGrepReportSinks.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfHdfsIO.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfReportSinks.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfSamplers.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfSyslogFormats.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/PerfThriftSinks.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+ delete mode 100644 src/javaperf/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
+ delete mode 100644 src/javaperf/com/cloudera/testio/PerfStringAppends.java
+ delete mode 100644 src/javaperf/com/cloudera/testio/PerfStringTrans.java
+
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
+new file mode 100644
+index 0000000..5fd4157
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/ExamplePerfData.java
+@@ -0,0 +1,30 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++/**
++ * This contains pointers to files use for performance testing. These files are
++ * large (~100MB each) and are not checked into the repository.
++ */
++public interface ExamplePerfData extends ExampleData {
++  final static String HADOOP_DATA[] = { "src/javaperf/data/hadoop_00000",
++  // "src/javaperf/data/hadoop_00001",
++  // TODO (jon) this goes to 53, only 00000 is present in data dir.
++  };
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
+new file mode 100644
+index 0000000..f52bc65
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfDiskIO.java
+@@ -0,0 +1,94 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.File;
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.Log4jTextFileSource;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
++import com.cloudera.flume.handlers.hdfs.SeqfileEventSource;
++import com.cloudera.util.Benchmark;
++
++/**
++ * This performance test tests the throughput of various disk reading and
++ * writing sources and sinks.
++ */
++public class PerfDiskIO implements ExamplePerfData {
++
++  @Test
++  public void testWrite() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("seqfile write");
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    File tmp = File.createTempFile("test", "tmp");
++    tmp.deleteOnExit();
++    SeqfileEventSink sink = new SeqfileEventSink(tmp);
++    sink.open();
++    b.mark("receiver_started");
++
++    EventUtil.dumpAll(mem, sink);
++
++    b.mark("seqfile_disk_write");
++
++    sink.close();
++    b.mark("seqfile size", tmp.length());
++    b.done();
++
++    // //////// second phase using the file written in previous phase.
++    Benchmark b2 = new Benchmark("seqfile_disk_read");
++    b2.mark("begin");
++
++    SeqfileEventSource seq = new SeqfileEventSource(tmp.getAbsolutePath());
++    seq.open();
++    MemorySinkSource mem2 = new MemorySinkSource();
++    EventUtil.dumpAll(seq, mem2);
++    seq.close();
++    b2.mark("seqfile_loaded");
++
++    b2.done();
++  }
++
++  @Test
++  public void testReadFormat() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("log4j format read");
++    b.mark("begin");
++
++    Log4jTextFileSource txt = new Log4jTextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("log4j_disk_loaded");
++    b.done();
++  }
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
+new file mode 100644
+index 0000000..cf0a754
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfGrepReportSinks.java
+@@ -0,0 +1,76 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.File;
++import java.io.IOException;
++
++import org.junit.Assert;
++import org.junit.Test;
++
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.reporter.builder.MultiGrepReporterBuilder;
++import com.cloudera.flume.reporter.histogram.MultiGrepReporterSink;
++import com.cloudera.util.Benchmark;
++import com.cloudera.util.Histogram;
++
++/**
++ * This set of performance tests isolate the system from I/O so so we can
++ * measure the overhead of the actual reporting machinery.
++ * 
++ * This crashes with OOME's .. What is wrong!?
++ */
++public class PerfGrepReportSinks implements ExamplePerfData {
++
++  @Test
++  public void testHadoopGrep() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("hadoop_greps");
++    b.mark("begin");
++
++    MultiGrepReporterBuilder bld = new MultiGrepReporterBuilder(HADOOP_GREP);
++
++    MultiGrepReporterSink<String> snk = bld.load().iterator().next();
++    snk.open();
++    b.mark("filters_loaded", new File(HADOOP_GREP).getName());
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark(snk.getName() + " done");
++
++    Histogram<String> histo = snk.getHistogram();
++    System.out.println(histo);
++    
++    // from grep | wc
++    Assert.assertEquals(230659, histo.get("NullPointerException"));
++    Assert.assertEquals(2916, histo.get("ConnectException"));
++    Assert.assertEquals(230663, histo.get("Lost tracker"));
++    Assert.assertEquals(166834, histo.get("mapred.TaskTracker: Resending"));
++    
++    
++    b.done();
++  }
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
+new file mode 100644
+index 0000000..4db1131
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfHdfsIO.java
+@@ -0,0 +1,115 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.File;
++import java.io.IOException;
++
++import org.apache.hadoop.fs.FileSystem;
++import org.apache.hadoop.fs.Path;
++import org.apache.hadoop.io.SequenceFile;
++import org.apache.hadoop.io.SequenceFile.Writer;
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
++import com.cloudera.flume.handlers.hdfs.WriteableEvent;
++import com.cloudera.flume.handlers.hdfs.WriteableEventKey;
++import com.cloudera.util.Benchmark;
++
++public class PerfHdfsIO implements ExamplePerfData {
++
++  @Test
++  public void testCopy() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("hdfs seqfile copy");
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    File tmp = File.createTempFile("test", "tmp");
++    tmp.deleteOnExit();
++    SeqfileEventSink sink = new SeqfileEventSink(tmp);
++    sink.open();
++    b.mark("localdisk_write_started");
++
++    EventUtil.dumpAll(mem, sink);
++
++    b.mark("local_disk_write done");
++
++    sink.close();
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    Path src = new Path(tmp.getAbsolutePath());
++    Path dst = new Path("hdfs://localhost/testfile");
++    FileSystem hdfs = dst.getFileSystem(conf);
++    hdfs.deleteOnExit(dst);
++
++    b.mark("hdfs_copy_started");
++    hdfs.copyFromLocalFile(src, dst);
++    b.mark("hdfs_copy_done");
++    hdfs.close();
++    b.done();
++  }
++
++  @Test
++  public void testDirectWrite() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("hdfs seqfile write");
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    Path path = new Path("hdfs://localhost/testfile");
++    FileSystem hdfs = path.getFileSystem(conf);
++    hdfs.deleteOnExit(path);
++
++    Writer w = SequenceFile.createWriter(hdfs, conf, path,
++        WriteableEventKey.class, WriteableEvent.class);
++    b.mark("hdfs_fileopen_started");
++
++    Event e = null;
++    while ((e = mem.next()) != null) {
++      // writing
++      w.append(new WriteableEventKey(e), new WriteableEvent(e));
++    }
++    w.close();
++    b.mark("seqfile_hdfs_write");
++
++    hdfs.close();
++    b.done();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
+new file mode 100644
+index 0000000..20fc6d5
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfReportSinks.java
+@@ -0,0 +1,133 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.File;
++import java.io.IOException;
++import java.util.Collection;
++
++import org.junit.Test;
++
++import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NullSink;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.reporter.MultiReporter;
++import com.cloudera.flume.reporter.aggregator.CounterSink;
++import com.cloudera.flume.reporter.builder.SimpleRegexReporterBuilder;
++import com.cloudera.flume.reporter.histogram.RegexGroupHistogramSink;
++import com.cloudera.util.Benchmark;
++
++/**
++ * This set of performance tests isolate the system from I/O so so we can
++ * measure the overhead of the actual reporting machinery.
++ */
++public class PerfReportSinks implements ExamplePerfData {
++
++  @Test
++  public void testNullSink() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    EventSink nullsnk = new NullSink();
++    EventUtil.dumpAll(mem, nullsnk);
++    b.mark("nullsink done");
++
++    b.done();
++  }
++
++  @Test
++  public void testCountSink() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    CounterSink snk = new CounterSink("counter");
++    EventUtil.dumpAll(mem, snk);
++    b.mark(snk.getName() + " done", snk.getCount());
++
++    b.done();
++  }
++
++  @Test
++  public void testHadoopRegexes() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("hadoop_regexes");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
++        HADOOP_REGEXES);
++
++    Collection<RegexGroupHistogramSink> sinks = bld.load();
++    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
++    snk.open();
++    b.mark("filters_loaded", new File(HADOOP_REGEXES).getName(), sinks.size());
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark(snk.getName() + " done");
++
++    b.done();
++  }
++
++  @Test
++  public void testHadoopRegexes11() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("hadoop_regexes");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
++        HADOOP_REGEXES_11);
++
++    Collection<RegexGroupHistogramSink> sinks = bld.load();
++    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
++    snk.open();
++    b.mark("filters_loaded", new File(HADOOP_REGEXES_11).getName(), sinks
++        .size());
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark(snk.getName() + " done");
++
++    b.done();
++  }
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
+new file mode 100644
+index 0000000..ef711f4
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSamplers.java
+@@ -0,0 +1,164 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.core.EventSink;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NullSink;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.reporter.aggregator.CounterSink;
++import com.cloudera.flume.reporter.sampler.IntervalSampler;
++import com.cloudera.flume.reporter.sampler.ProbabilitySampler;
++import com.cloudera.flume.reporter.sampler.ReservoirSamplerDeco;
++import com.cloudera.util.Benchmark;
++
++/**
++ * Performance testing for the various samplers.
++ */
++public class PerfSamplers implements ExamplePerfData {
++
++  @Test
++  public void testReservoirSampler() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("Reservoir sampler + nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    b.mark("disk_loaded");
++
++    NullSink nullsnk = new NullSink();
++    EventUtil.dumpAll(mem, nullsnk);
++    b.mark("warmup");
++
++    int res_size[] = { 100, 1000, 10000, 100000 };
++    for (int i = 0; i < res_size.length; i++) {
++      mem.open();
++      int sz = res_size[i];
++      EventSink res = new ReservoirSamplerDeco<NullSink>(new NullSink(), sz);
++      EventUtil.dumpAll(mem, res);
++      b.mark("reservoir " + sz + " sampling done", sz);
++
++      res.close();
++      b.mark("sample dump done");
++    }
++
++    for (int i = 0; i < res_size.length; i++) {
++      mem.open();
++      int sz = res_size[i];
++      CounterSink cnt = new CounterSink("null");
++      EventSink res = new ReservoirSamplerDeco<CounterSink>(cnt, sz);
++      EventUtil.dumpAll(mem, res);
++      b.mark("reservoir", sz);
++
++      res.close();
++      b.mark("count", cnt.getCount());
++    }
++    b.done();
++  }
++
++  @Test
++  public void testIntervalSampler() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("Interval sampler + nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    b.mark("disk_loaded");
++
++    NullSink nullsnk = new NullSink();
++    EventUtil.dumpAll(mem, nullsnk);
++    b.mark("warmup");
++
++    int interval_size[] = { 100000, 10000, 1000, 100 };
++    for (int i = 0; i < interval_size.length; i++) {
++      mem.open();
++      int sz = interval_size[i];
++      EventSink res = new IntervalSampler<NullSink>(new NullSink(), sz);
++      EventUtil.dumpAll(mem, res);
++      b.mark("interval " + sz + " sampling done", sz);
++
++      res.close();
++      b.mark("sample dump done");
++    }
++
++    for (int i = 0; i < interval_size.length; i++) {
++      mem.open();
++      int sz = interval_size[i];
++      CounterSink cnt = new CounterSink("null");
++      EventSink res = new IntervalSampler<CounterSink>(cnt, sz);
++      EventUtil.dumpAll(mem, res);
++      b.mark("interval", sz);
++
++      res.close();
++      b.mark("count", cnt.getCount());
++    }
++    b.done();
++  }
++
++  @Test
++  public void testProbabilitySampler() throws IOException, InterruptedException {
++    Benchmark b = new Benchmark("Reservoir sampler + nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++
++    b.mark("disk_loaded");
++
++    NullSink nullsnk = new NullSink();
++    EventUtil.dumpAll(mem, nullsnk);
++    b.mark("warmup");
++
++    double probs[] = { .00001, .0001, .001, .01 };
++    for (int i = 0; i < probs.length; i++) {
++      mem.open();
++      double prob = probs[i];
++      EventSink res = new ProbabilitySampler<NullSink>(new NullSink(), prob);
++      EventUtil.dumpAll(mem, res);
++      b.mark("probability" + prob + " sampling done", prob);
++
++      res.close();
++      b.mark("sample dump done");
++    }
++
++    for (int i = 0; i < probs.length; i++) {
++      mem.open();
++      double prob = probs[i];
++      CounterSink cnt = new CounterSink("null");
++      EventSink res = new ProbabilitySampler<CounterSink>(cnt, prob);
++      EventUtil.dumpAll(mem, res);
++      b.mark("probability", prob);
++
++      res.close();
++      b.mark("count", cnt.getCount());
++    }
++    b.done();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
+new file mode 100644
+index 0000000..9868a53
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfSyslogFormats.java
+@@ -0,0 +1,86 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NullSink;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.handlers.text.EventExtractException;
++import com.cloudera.flume.handlers.text.SyslogEntryFormat;
++import com.cloudera.flume.reporter.aggregator.CounterSink;
++import com.cloudera.util.Benchmark;
++
++/**
++ * Performance testing for the throughput of syslog and apache log format
++ * parsing.
++ */
++public class PerfSyslogFormats implements ExamplePerfData {
++
++  @Test
++  public void testSyslogFormat() throws IOException, EventExtractException,
++      InterruptedException {
++    Benchmark b = new Benchmark("Syslog format + nullsink");
++    b.mark("begin");
++    TextFileSource txt = new TextFileSource(SYSLOG_LOG); // 23244 entires
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++
++    b.mark("disk_loaded");
++    Event e = null;
++    NullSink sink = new NullSink();
++    SyslogEntryFormat syslog = new SyslogEntryFormat();
++    while ((e = mem.next()) != null) {
++      Event e2 = syslog.extract(new String(e.getBody()), 2009);
++      sink.append(e2);
++    }
++    sink.close();
++    b.mark("warmup done");
++
++    e = null;
++    mem.open();
++    while ((e = mem.next()) != null) {
++      Event e2 = syslog.extract(new String(e.getBody()), 2009);
++      sink.append(e2);
++    }
++    sink.close();
++    b.mark("sample dump done");
++
++    e = null;
++    mem.open();
++    CounterSink sink2 = new CounterSink("counter");
++
++    while ((e = mem.next()) != null) {
++      Event e2 = syslog.extract(new String(e.getBody()), 2009);
++      sink2.append(e2);
++    }
++    sink2.close();
++    b.mark("count done", sink2.getCount());
++
++    b.done();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
+new file mode 100644
+index 0000000..aa2c986
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/PerfThriftSinks.java
+@@ -0,0 +1,218 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume;
++
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeConfiguration;
++import com.cloudera.flume.core.EventUtil;
++import com.cloudera.flume.handlers.debug.MemorySinkSource;
++import com.cloudera.flume.handlers.debug.NullSink;
++import com.cloudera.flume.handlers.debug.TextFileSource;
++import com.cloudera.flume.handlers.thrift.ThriftEventSink;
++import com.cloudera.flume.handlers.thrift.ThriftEventSource;
++import com.cloudera.util.Benchmark;
++
++/**
++ * These tests are for microbenchmarking the thrift sink and server elements.
++ */
++public class PerfThriftSinks implements ExamplePerfData {
++
++  /**
++   * Pipeline is:
++   * 
++   * text -> mem
++   * 
++   * mem -> ThriftEventSink -> ThriftEventSource -> NullSink
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void testThriftSend() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
++        .getCollectorPort());
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("thrift sink to thrift source done");
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * This is slighlty different by using another thread to kick off the sink. It
++   * shouldn't really matter much.
++   * 
++   * Pipeline is:
++   * 
++   * text -> mem
++   * 
++   * mem -> ThriftEventSink -> ThriftEventSource -> NullSink
++   **/
++  @Test
++  public void testThriftSendMulti() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
++        .getCollectorPort());
++
++    Thread t = new Thread() {
++      public void run() {
++        try {
++          snk.open();
++        } catch (IOException e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    t.start();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("thrift sink to thrift source done");
++
++    Thread.sleep(1000);
++    tes.close();
++    snk.close();
++    t.interrupt();
++    drain.interrupt();
++    b.done();
++  }
++
++  /**
++   * Here we are using the ThriftRawEventSink instead of the ThriftEventSink
++   * 
++   * Pipeline is:
++   * 
++   * text -> mem
++   * 
++   * mem -> ThriftRawEventSink -> ThriftEventSource -> NullSink
++   * 
++   * @throws InterruptedException
++   */
++  @Test
++  public void testThriftRawSend() throws IOException, InterruptedException {
++
++    Benchmark b = new Benchmark("nullsink");
++
++    b.mark("begin");
++
++    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
++    txt.open();
++    MemorySinkSource mem = new MemorySinkSource();
++    mem.open();
++    EventUtil.dumpAll(txt, mem);
++    txt.close();
++    b.mark("disk_loaded");
++
++    FlumeConfiguration conf = FlumeConfiguration.get();
++    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
++    tes.open();
++    // need to drain the sink otherwise its queue will fill up with events!
++    Thread drain = new Thread("drain") {
++      public void run() {
++        try {
++          EventUtil.dumpAll(tes, new NullSink());
++        } catch (Exception e) {
++          // TODO Auto-generated catch block
++          e.printStackTrace();
++        }
++      }
++    };
++    drain.start(); // drain the sink.
++    b.mark("receiver_started");
++
++    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
++        .getCollectorPort());
++    snk.open();
++    b.mark("sink_started");
++
++    EventUtil.dumpAll(mem, snk);
++    b.mark("thrift sink to thrift source done");
++
++    tes.close();
++    snk.close();
++    drain.interrupt();
++    b.done();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+new file mode 100644
+index 0000000..02b0e1b
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+@@ -0,0 +1,74 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.agent;
++
++import java.io.IOException;
++
++import org.apache.log4j.Level;
++import org.apache.log4j.Logger;
++import org.junit.Before;
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.util.BenchmarkHarness;
++
++public class BenchmarkAgentDecos {
++
++  /**
++   * Logs output to stderr, this should mute them unless they are serious.
++   */
++  @Before
++  public void muteLogs() {
++    Logger.getRootLogger().setLevel(Level.WARN);
++  }
++
++  @Test
++  public void tiny() throws FlumeSpecException, IOException, InterruptedException {
++    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.tiny);
++    BenchmarkHarness.doDecoBenchmark("diskFailover", BenchmarkHarness.tiny);
++    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead", BenchmarkHarness.tiny);
++  }
++
++  @Test
++  public void nullDecorator() throws FlumeSpecException, IOException, InterruptedException {
++    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyMsgBytes);
++    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyNumAttrs);
++    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyValSize);
++  }
++
++  @Test
++  public void dfoDecorator2() throws FlumeSpecException, IOException, InterruptedException {
++    BenchmarkHarness.doDecoBenchmark("diskFailover",
++        BenchmarkHarness.varyMsgBytes);
++    BenchmarkHarness.doDecoBenchmark("diskFailover",
++        BenchmarkHarness.varyNumAttrs);
++    BenchmarkHarness.doDecoBenchmark("diskFailover",
++        BenchmarkHarness.varyValSize);
++  }
++
++  @Test
++  public void e2eDecorator() throws FlumeSpecException, IOException, InterruptedException {
++    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        BenchmarkHarness.varyMsgBytes);
++    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        BenchmarkHarness.varyNumAttrs);
++    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
++        BenchmarkHarness.varyValSize);
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+new file mode 100644
+index 0000000..7035dbe
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+@@ -0,0 +1,48 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.agent;
++
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.conf.FlumeSpecException;
++import com.cloudera.util.BenchmarkHarness;
++
++/**
++ * Benchmark tests on basic decorators.
++ */
++public class BenchmarkBasicDecos {
++  String[] decos = { "nullDeco", "ackInjector", "ackChecker", };
++
++  String[] batching = { "batch(10)", "batch(100)", "batch(1000)" };
++
++  // TODO (jon) new decorator chaining notation
++  // String[] gzips = { "batch(10) gzip", "batch(100) gzip", "batch(1000) gzip"
++  // };
++
++  @Test
++  public void basicDecorator() throws FlumeSpecException, IOException,
++      InterruptedException {
++    for (String d : decos) {
++      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyMsgBytes);
++      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyNumAttrs);
++      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyValSize);
++    }
++  }
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java b/flume-microbenchmarks/src/test/java/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
+new file mode 100644
+index 0000000..630a913
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
+@@ -0,0 +1,255 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.flume.handlers.syslog;
++
++import java.io.ByteArrayInputStream;
++import java.io.ByteArrayOutputStream;
++import java.io.DataInputStream;
++import java.io.EOFException;
++import java.io.IOException;
++
++import org.junit.Test;
++
++import com.cloudera.flume.core.Event;
++import com.cloudera.flume.handlers.debug.NoNlSynthSource;
++import com.cloudera.flume.handlers.text.EventExtractException;
++import com.cloudera.util.Benchmark;
++
++/**
++ * This demonstrates the rate that these different extractors work at.
++ * 
++ * test on the same machine"
++ * 
++ * Old method using regex: 1M messages, 100 bytes each, 8.4s => 11,9 MB/s (which
++ * is close to SyslogTcp socket throughput limit). (Apparently there were bugs
++ * in the regex)
++ * 
++ * 500MB / 41.0 s => `12.2 MB/s
++ * 
++ * New method using custom parser removing time syscalls: 1M message, 100 bytes,
++ * each, 5x
++ * 
++ * 500MB / 15.3 => 32.7 MB/s
++ */
++public class PerfSyslogWireExtract {
++
++  /**
++   * Generates a dataset, puts it into a memory buffer, and the uses the
++   * DataInputStream machinery to read through it 100 bytes at a time.
++   * 
++   * 1M x 100 bytes, 5 times
++   */
++  @Test
++  public void testNewExtractScan100() throws IOException, EventExtractException {
++    Benchmark b = new Benchmark("new extract - scan 100 blocks");
++
++    b.mark("build dataset");
++    ByteArrayOutputStream out = new ByteArrayOutputStream();
++    // 1M x 100 byte messages, 0 is the rand seed
++    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
++
++    src.open();
++    Event e = null;
++    while ((e = src.next()) != null) {
++      out.write("<33>".getBytes());
++      out.write(e.getBody());
++      out.write('\n');
++    }
++
++    b.mark("start parsing dataset");
++    int good = 0;
++    int bad = 0;
++    int lines = 0;
++
++    // We do this test 100 times!
++    for (int i = 0; i < 5; i++) {
++      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
++          .toByteArray()));
++      lines++;
++      try {
++        byte[] data = new byte[100];
++        while (true)
++          in.readFully(data);
++      } catch (EOFException eof) {
++        // expected.
++      }
++
++    }
++    b.mark("complete-good-bad", good, bad, lines);
++    b.done();
++  }
++
++  /**
++   * Generates a dataset, puts it into a memory buffer, and the uses the
++   * DataInputStream machinery to read through it 1000 bytes at a time.
++   * 
++   * 1M x 100 bytes, 5 times
++   */
++  @Test
++  public void testNewExtractScan1000() throws IOException,
++      EventExtractException {
++    Benchmark b = new Benchmark("new extract - scan 1000 blocks");
++
++    b.mark("build dataset");
++    ByteArrayOutputStream out = new ByteArrayOutputStream();
++    // 1M x 100 byte messages, 0 is the rand seed
++    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
++
++    src.open();
++    Event e = null;
++    while ((e = src.next()) != null) {
++      out.write("<33>".getBytes());
++      out.write(e.getBody());
++      out.write('\n');
++    }
++
++    b.mark("start parsing dataset");
++    int good = 0;
++    int bad = 0;
++    int lines = 0;
++
++    // We do this test 100 times!
++    for (int i = 0; i < 5; i++) {
++      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
++          .toByteArray()));
++      try {
++        byte[] data = new byte[1000];
++        while (true) {
++          lines++;
++
++          in.readFully(data);
++        }
++      } catch (EOFException eof) {
++        // expected.
++      }
++
++    }
++    b.mark("complete-good-bad", good, bad, lines);
++    b.done();
++  }
++
++  /**
++   * Generates a dataset, puts it into a memory buffer, and the uses the
++   * DataInputStream machinery to read through it one byte at a time.
++   * 
++   * 1M x 100 bytes, 5 times
++   */
++  @Test
++  public void testNewExtractScan() throws IOException, EventExtractException {
++    Benchmark b = new Benchmark("new extract - scan single byte");
++
++    b.mark("build dataset");
++    ByteArrayOutputStream out = new ByteArrayOutputStream();
++    // 1M x 100 byte messages, 0 is the rand seed
++    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
++
++    src.open();
++    Event e = null;
++    while ((e = src.next()) != null) {
++      out.write("<33>".getBytes());
++      out.write(e.getBody());
++      out.write('\n');
++    }
++
++    b.mark("start parsing dataset");
++    int good = 0;
++    int bad = 0;
++    int lines = 0;
++
++    // We do this test 100 times!
++    for (int i = 0; i < 5; i++) {
++      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
++          .toByteArray()));
++      try {
++        while (true) {
++          lines++;
++
++          in.readByte();
++        }
++      } catch (EOFException eof) {
++        // expected.
++      }
++
++    }
++    b.mark("complete-good-bad", good, bad, lines);
++    b.done();
++  }
++
++  /**
++   * Generates a dataset, puts it into a memory buffer, and the uses the
++   * DataInputStream machinery to read through it one parsed record at a time.
++   */
++  @Test
++  public void testNewExtract() throws IOException, EventExtractException {
++    Benchmark b = new Benchmark("regex extract");
++
++    b.mark("build dataset");
++    ByteArrayOutputStream out = new ByteArrayOutputStream();
++    // 1M x 100 byte messages, 0 is the rand seed
++    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
++
++    src.open();
++    Event e = null;
++    while ((e = src.next()) != null) {
++      out.write("<33>".getBytes());
++      out.write(e.getBody());
++      out.write('\n');
++    }
++
++    byte[] outbytes = out.toByteArray();
++    System.out.println("Outbytes length : " + outbytes.length);
++    b.mark("start parsing dataset");
++    int good = 0;
++    int bad = 0;
++    int lines = 0;
++
++    // We do this test 50 times!
++    for (int i = 0; i < 5; i++) {
++      DataInputStream in = new DataInputStream(new ByteArrayInputStream(
++          outbytes));
++
++      Event evt = null;
++      while (true) {
++        try {
++          lines++;
++          evt = SyslogWireExtractor.extractEvent(in);
++          if (evt == null)
++            break;
++          good++;
++        } catch (Exception eee) {
++          bad++;
++        }
++      }
++    }
++    b.mark("complete-good-bad", good, bad, lines);
++    b.done();
++  }
++
++  /**
++   * A harness so that the profiler can attach to the process.
++   */
++  static public void main(String[] argv) throws IOException,
++      EventExtractException {
++    // A harness for the profiler.
++
++    new PerfSyslogWireExtract().testNewExtract();
++    // new PerfNewSyslogWireExtract().testOldExtract();
++    // new PerfNewSyslogWireExtract().testNewBlockExtract();
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringAppends.java b/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringAppends.java
+new file mode 100644
+index 0000000..7b28930
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringAppends.java
+@@ -0,0 +1,148 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.testio;
++
++import org.junit.Test;
++
++import com.cloudera.util.Benchmark;
++
++/**
++ * There are three formats for handling blobs of data. Which is the most
++ * efficient, which are the most convenient and which are the cheapest to
++ * translate to and from?
++ * 
++ */
++
++// String --------> 1.3s 1.4 1.3 --------> 7.7Mops/s
++// StringBuffer --> 1.2s 1.2 1.2 --------> 8.3Mops/s
++// StringBuilder -> .75s 0.77 .78 ------> 13.0Mops/s
++// StringFormat --> 13.9s 14.3 15.7 -----> 0.7Mops/s
++
++public class PerfStringAppends {
++
++  int times = 10000000;
++
++  String base = "this is a test";
++
++  @Test
++  public void testStringAppend() {
++    Benchmark b = new Benchmark("String Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      @SuppressWarnings("unused")
++      String temp = base + i;
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringBufferAppend() {
++    StringBuffer buf = new StringBuffer(base);
++    Benchmark b = new Benchmark("StringBuffer Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      buf.append(i);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringBuilderAppend() {
++    StringBuilder buf = new StringBuilder(base);
++    Benchmark b = new Benchmark("StringBuffer Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      buf.append(i);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringFormat() {
++    String format = "%s%d";
++    Benchmark b = new Benchmark("StringFormatAppend");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      String.format(format, base, i);
++    }
++    b.mark("after " + times);
++    b.done();
++
++  }
++
++  @Test
++  public void testStringAppend2() {
++    Benchmark b = new Benchmark("String Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      @SuppressWarnings("unused")
++      String temp = base + i;
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringBufferAppend2() {
++    StringBuffer buf = new StringBuffer(base);
++    Benchmark b = new Benchmark("StringBuffer Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      buf.append(i);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringBuilderAppend2() {
++    StringBuilder buf = new StringBuilder(base);
++    Benchmark b = new Benchmark("StringBuffer Append");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      buf.append(i);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringFormat2() {
++    String format = "%s%d";
++    Benchmark b = new Benchmark("StringFormatAppend");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      String.format(format, base, i);
++    }
++    b.mark("after " + times);
++    b.done();
++
++  }
++
++}
+diff --git a/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringTrans.java b/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringTrans.java
+new file mode 100644
+index 0000000..4724525
+--- /dev/null
++++ b/flume-microbenchmarks/src/test/java/com/cloudera/testio/PerfStringTrans.java
+@@ -0,0 +1,113 @@
++/**
++ * Licensed to Cloudera, Inc. under one
++ * or more contributor license agreements.  See the NOTICE file
++ * distributed with this work for additional information
++ * regarding copyright ownership.  Cloudera, Inc. licenses this file
++ * to you under the Apache License, Version 2.0 (the
++ * "License"); you may not use this file except in compliance
++ * with the License.  You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.cloudera.testio;
++
++import java.nio.ByteBuffer;
++
++import org.junit.Test;
++
++import com.cloudera.util.Benchmark;
++
++/**
++ * This is a performance test to see how expensive different string/byte
++ * translations cost
++ */
++public class PerfStringTrans  {
++  int times = 10000000;
++
++  String base = "this is a test";
++
++  @Test
++  public void testStringToByteArray() {
++    Benchmark b = new Benchmark("String to ByteArray");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      base.getBytes();
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringToWrapByteBuffer() {
++    Benchmark b = new Benchmark("String wrap ByteBuf");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      ByteBuffer.wrap(base.getBytes());
++    }
++    b.mark("after " + times);
++    b.done();
++
++  }
++
++  @Test
++  public void testStringtoByteBufferCopy() {
++    Benchmark b = new Benchmark("String alloc ByteBuf");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      byte[] buf = base.getBytes();
++      ByteBuffer bb = ByteBuffer.allocate(buf.length);
++      bb.put(buf);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringToByteArray2() {
++    Benchmark b = new Benchmark("String to ByteArray");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      base.getBytes();
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++  @Test
++  public void testStringToWrapByteBuffer2() {
++    Benchmark b = new Benchmark("String wrap ByteBuf");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      ByteBuffer.wrap(base.getBytes());
++    }
++    b.mark("after " + times);
++    b.done();
++
++  }
++
++  @Test
++  public void testStringtoByteBufferCopy2() {
++    Benchmark b = new Benchmark("String alloc ByteBuf");
++
++    b.mark("begin");
++    for (int i = 0; i < times; i++) {
++      byte[] buf = base.getBytes();
++      ByteBuffer bb = ByteBuffer.allocate(buf.length);
++      bb.put(buf);
++    }
++    b.mark("after " + times);
++    b.done();
++  }
++
++}
+diff --git a/src/javaperf/com/cloudera/flume/ExamplePerfData.java b/src/javaperf/com/cloudera/flume/ExamplePerfData.java
+deleted file mode 100644
+index 5fd4157..0000000
+--- a/src/javaperf/com/cloudera/flume/ExamplePerfData.java
++++ /dev/null
+@@ -1,30 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-/**
+- * This contains pointers to files use for performance testing. These files are
+- * large (~100MB each) and are not checked into the repository.
+- */
+-public interface ExamplePerfData extends ExampleData {
+-  final static String HADOOP_DATA[] = { "src/javaperf/data/hadoop_00000",
+-  // "src/javaperf/data/hadoop_00001",
+-  // TODO (jon) this goes to 53, only 00000 is present in data dir.
+-  };
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfDiskIO.java b/src/javaperf/com/cloudera/flume/PerfDiskIO.java
+deleted file mode 100644
+index f52bc65..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfDiskIO.java
++++ /dev/null
+@@ -1,94 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.File;
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.Log4jTextFileSource;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+-import com.cloudera.flume.handlers.hdfs.SeqfileEventSource;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * This performance test tests the throughput of various disk reading and
+- * writing sources and sinks.
+- */
+-public class PerfDiskIO implements ExamplePerfData {
+-
+-  @Test
+-  public void testWrite() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("seqfile write");
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    File tmp = File.createTempFile("test", "tmp");
+-    tmp.deleteOnExit();
+-    SeqfileEventSink sink = new SeqfileEventSink(tmp);
+-    sink.open();
+-    b.mark("receiver_started");
+-
+-    EventUtil.dumpAll(mem, sink);
+-
+-    b.mark("seqfile_disk_write");
+-
+-    sink.close();
+-    b.mark("seqfile size", tmp.length());
+-    b.done();
+-
+-    // //////// second phase using the file written in previous phase.
+-    Benchmark b2 = new Benchmark("seqfile_disk_read");
+-    b2.mark("begin");
+-
+-    SeqfileEventSource seq = new SeqfileEventSource(tmp.getAbsolutePath());
+-    seq.open();
+-    MemorySinkSource mem2 = new MemorySinkSource();
+-    EventUtil.dumpAll(seq, mem2);
+-    seq.close();
+-    b2.mark("seqfile_loaded");
+-
+-    b2.done();
+-  }
+-
+-  @Test
+-  public void testReadFormat() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("log4j format read");
+-    b.mark("begin");
+-
+-    Log4jTextFileSource txt = new Log4jTextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("log4j_disk_loaded");
+-    b.done();
+-  }
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfGrepReportSinks.java b/src/javaperf/com/cloudera/flume/PerfGrepReportSinks.java
+deleted file mode 100644
+index cf0a754..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfGrepReportSinks.java
++++ /dev/null
+@@ -1,76 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.File;
+-import java.io.IOException;
+-
+-import org.junit.Assert;
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.reporter.builder.MultiGrepReporterBuilder;
+-import com.cloudera.flume.reporter.histogram.MultiGrepReporterSink;
+-import com.cloudera.util.Benchmark;
+-import com.cloudera.util.Histogram;
+-
+-/**
+- * This set of performance tests isolate the system from I/O so so we can
+- * measure the overhead of the actual reporting machinery.
+- * 
+- * This crashes with OOME's .. What is wrong!?
+- */
+-public class PerfGrepReportSinks implements ExamplePerfData {
+-
+-  @Test
+-  public void testHadoopGrep() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_greps");
+-    b.mark("begin");
+-
+-    MultiGrepReporterBuilder bld = new MultiGrepReporterBuilder(HADOOP_GREP);
+-
+-    MultiGrepReporterSink<String> snk = bld.load().iterator().next();
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_GREP).getName());
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    Histogram<String> histo = snk.getHistogram();
+-    System.out.println(histo);
+-    
+-    // from grep | wc
+-    Assert.assertEquals(230659, histo.get("NullPointerException"));
+-    Assert.assertEquals(2916, histo.get("ConnectException"));
+-    Assert.assertEquals(230663, histo.get("Lost tracker"));
+-    Assert.assertEquals(166834, histo.get("mapred.TaskTracker: Resending"));
+-    
+-    
+-    b.done();
+-  }
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfHdfsIO.java b/src/javaperf/com/cloudera/flume/PerfHdfsIO.java
+deleted file mode 100644
+index 4db1131..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfHdfsIO.java
++++ /dev/null
+@@ -1,115 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.File;
+-import java.io.IOException;
+-
+-import org.apache.hadoop.fs.FileSystem;
+-import org.apache.hadoop.fs.Path;
+-import org.apache.hadoop.io.SequenceFile;
+-import org.apache.hadoop.io.SequenceFile.Writer;
+-import org.junit.Test;
+-
+-import com.cloudera.flume.conf.FlumeConfiguration;
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.handlers.hdfs.SeqfileEventSink;
+-import com.cloudera.flume.handlers.hdfs.WriteableEvent;
+-import com.cloudera.flume.handlers.hdfs.WriteableEventKey;
+-import com.cloudera.util.Benchmark;
+-
+-public class PerfHdfsIO implements ExamplePerfData {
+-
+-  @Test
+-  public void testCopy() throws IOException, InterruptedException {
+-
+-    Benchmark b = new Benchmark("hdfs seqfile copy");
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    File tmp = File.createTempFile("test", "tmp");
+-    tmp.deleteOnExit();
+-    SeqfileEventSink sink = new SeqfileEventSink(tmp);
+-    sink.open();
+-    b.mark("localdisk_write_started");
+-
+-    EventUtil.dumpAll(mem, sink);
+-
+-    b.mark("local_disk_write done");
+-
+-    sink.close();
+-
+-    FlumeConfiguration conf = FlumeConfiguration.get();
+-    Path src = new Path(tmp.getAbsolutePath());
+-    Path dst = new Path("hdfs://localhost/testfile");
+-    FileSystem hdfs = dst.getFileSystem(conf);
+-    hdfs.deleteOnExit(dst);
+-
+-    b.mark("hdfs_copy_started");
+-    hdfs.copyFromLocalFile(src, dst);
+-    b.mark("hdfs_copy_done");
+-    hdfs.close();
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testDirectWrite() throws IOException, InterruptedException {
+-
+-    Benchmark b = new Benchmark("hdfs seqfile write");
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    FlumeConfiguration conf = FlumeConfiguration.get();
+-    Path path = new Path("hdfs://localhost/testfile");
+-    FileSystem hdfs = path.getFileSystem(conf);
+-    hdfs.deleteOnExit(path);
+-
+-    Writer w = SequenceFile.createWriter(hdfs, conf, path,
+-        WriteableEventKey.class, WriteableEvent.class);
+-    b.mark("hdfs_fileopen_started");
+-
+-    Event e = null;
+-    while ((e = mem.next()) != null) {
+-      // writing
+-      w.append(new WriteableEventKey(e), new WriteableEvent(e));
+-    }
+-    w.close();
+-    b.mark("seqfile_hdfs_write");
+-
+-    hdfs.close();
+-    b.done();
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfReportSinks.java b/src/javaperf/com/cloudera/flume/PerfReportSinks.java
+deleted file mode 100644
+index 20fc6d5..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfReportSinks.java
++++ /dev/null
+@@ -1,133 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.File;
+-import java.io.IOException;
+-import java.util.Collection;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.EventSink;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.reporter.MultiReporter;
+-import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.flume.reporter.builder.SimpleRegexReporterBuilder;
+-import com.cloudera.flume.reporter.histogram.RegexGroupHistogramSink;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * This set of performance tests isolate the system from I/O so so we can
+- * measure the overhead of the actual reporting machinery.
+- */
+-public class PerfReportSinks implements ExamplePerfData {
+-
+-  @Test
+-  public void testNullSink() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    EventSink nullsnk = new NullSink();
+-    EventUtil.dumpAll(mem, nullsnk);
+-    b.mark("nullsink done");
+-
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testCountSink() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    CounterSink snk = new CounterSink("counter");
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done", snk.getCount());
+-
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testHadoopRegexes() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_regexes");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
+-        HADOOP_REGEXES);
+-
+-    Collection<RegexGroupHistogramSink> sinks = bld.load();
+-    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_REGEXES).getName(), sinks.size());
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testHadoopRegexes11() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("hadoop_regexes");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    SimpleRegexReporterBuilder bld = new SimpleRegexReporterBuilder(
+-        HADOOP_REGEXES_11);
+-
+-    Collection<RegexGroupHistogramSink> sinks = bld.load();
+-    MultiReporter snk = new MultiReporter("hadoop_regex_sinks", sinks);
+-    snk.open();
+-    b.mark("filters_loaded", new File(HADOOP_REGEXES_11).getName(), sinks
+-        .size());
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark(snk.getName() + " done");
+-
+-    b.done();
+-  }
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfSamplers.java b/src/javaperf/com/cloudera/flume/PerfSamplers.java
+deleted file mode 100644
+index ef711f4..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfSamplers.java
++++ /dev/null
+@@ -1,164 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.EventSink;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.flume.reporter.sampler.IntervalSampler;
+-import com.cloudera.flume.reporter.sampler.ProbabilitySampler;
+-import com.cloudera.flume.reporter.sampler.ReservoirSamplerDeco;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * Performance testing for the various samplers.
+- */
+-public class PerfSamplers implements ExamplePerfData {
+-
+-  @Test
+-  public void testReservoirSampler() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("Reservoir sampler + nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    b.mark("disk_loaded");
+-
+-    NullSink nullsnk = new NullSink();
+-    EventUtil.dumpAll(mem, nullsnk);
+-    b.mark("warmup");
+-
+-    int res_size[] = { 100, 1000, 10000, 100000 };
+-    for (int i = 0; i < res_size.length; i++) {
+-      mem.open();
+-      int sz = res_size[i];
+-      EventSink res = new ReservoirSamplerDeco<NullSink>(new NullSink(), sz);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("reservoir " + sz + " sampling done", sz);
+-
+-      res.close();
+-      b.mark("sample dump done");
+-    }
+-
+-    for (int i = 0; i < res_size.length; i++) {
+-      mem.open();
+-      int sz = res_size[i];
+-      CounterSink cnt = new CounterSink("null");
+-      EventSink res = new ReservoirSamplerDeco<CounterSink>(cnt, sz);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("reservoir", sz);
+-
+-      res.close();
+-      b.mark("count", cnt.getCount());
+-    }
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testIntervalSampler() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("Interval sampler + nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    b.mark("disk_loaded");
+-
+-    NullSink nullsnk = new NullSink();
+-    EventUtil.dumpAll(mem, nullsnk);
+-    b.mark("warmup");
+-
+-    int interval_size[] = { 100000, 10000, 1000, 100 };
+-    for (int i = 0; i < interval_size.length; i++) {
+-      mem.open();
+-      int sz = interval_size[i];
+-      EventSink res = new IntervalSampler<NullSink>(new NullSink(), sz);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("interval " + sz + " sampling done", sz);
+-
+-      res.close();
+-      b.mark("sample dump done");
+-    }
+-
+-    for (int i = 0; i < interval_size.length; i++) {
+-      mem.open();
+-      int sz = interval_size[i];
+-      CounterSink cnt = new CounterSink("null");
+-      EventSink res = new IntervalSampler<CounterSink>(cnt, sz);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("interval", sz);
+-
+-      res.close();
+-      b.mark("count", cnt.getCount());
+-    }
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testProbabilitySampler() throws IOException, InterruptedException {
+-    Benchmark b = new Benchmark("Reservoir sampler + nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-
+-    b.mark("disk_loaded");
+-
+-    NullSink nullsnk = new NullSink();
+-    EventUtil.dumpAll(mem, nullsnk);
+-    b.mark("warmup");
+-
+-    double probs[] = { .00001, .0001, .001, .01 };
+-    for (int i = 0; i < probs.length; i++) {
+-      mem.open();
+-      double prob = probs[i];
+-      EventSink res = new ProbabilitySampler<NullSink>(new NullSink(), prob);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("probability" + prob + " sampling done", prob);
+-
+-      res.close();
+-      b.mark("sample dump done");
+-    }
+-
+-    for (int i = 0; i < probs.length; i++) {
+-      mem.open();
+-      double prob = probs[i];
+-      CounterSink cnt = new CounterSink("null");
+-      EventSink res = new ProbabilitySampler<CounterSink>(cnt, prob);
+-      EventUtil.dumpAll(mem, res);
+-      b.mark("probability", prob);
+-
+-      res.close();
+-      b.mark("count", cnt.getCount());
+-    }
+-    b.done();
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfSyslogFormats.java b/src/javaperf/com/cloudera/flume/PerfSyslogFormats.java
+deleted file mode 100644
+index 9868a53..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfSyslogFormats.java
++++ /dev/null
+@@ -1,86 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.handlers.text.EventExtractException;
+-import com.cloudera.flume.handlers.text.SyslogEntryFormat;
+-import com.cloudera.flume.reporter.aggregator.CounterSink;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * Performance testing for the throughput of syslog and apache log format
+- * parsing.
+- */
+-public class PerfSyslogFormats implements ExamplePerfData {
+-
+-  @Test
+-  public void testSyslogFormat() throws IOException, EventExtractException,
+-      InterruptedException {
+-    Benchmark b = new Benchmark("Syslog format + nullsink");
+-    b.mark("begin");
+-    TextFileSource txt = new TextFileSource(SYSLOG_LOG); // 23244 entires
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-
+-    b.mark("disk_loaded");
+-    Event e = null;
+-    NullSink sink = new NullSink();
+-    SyslogEntryFormat syslog = new SyslogEntryFormat();
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink.append(e2);
+-    }
+-    sink.close();
+-    b.mark("warmup done");
+-
+-    e = null;
+-    mem.open();
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink.append(e2);
+-    }
+-    sink.close();
+-    b.mark("sample dump done");
+-
+-    e = null;
+-    mem.open();
+-    CounterSink sink2 = new CounterSink("counter");
+-
+-    while ((e = mem.next()) != null) {
+-      Event e2 = syslog.extract(new String(e.getBody()), 2009);
+-      sink2.append(e2);
+-    }
+-    sink2.close();
+-    b.mark("count done", sink2.getCount());
+-
+-    b.done();
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/PerfThriftSinks.java b/src/javaperf/com/cloudera/flume/PerfThriftSinks.java
+deleted file mode 100644
+index aa2c986..0000000
+--- a/src/javaperf/com/cloudera/flume/PerfThriftSinks.java
++++ /dev/null
+@@ -1,218 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume;
+-
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.conf.FlumeConfiguration;
+-import com.cloudera.flume.core.EventUtil;
+-import com.cloudera.flume.handlers.debug.MemorySinkSource;
+-import com.cloudera.flume.handlers.debug.NullSink;
+-import com.cloudera.flume.handlers.debug.TextFileSource;
+-import com.cloudera.flume.handlers.thrift.ThriftEventSink;
+-import com.cloudera.flume.handlers.thrift.ThriftEventSource;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * These tests are for microbenchmarking the thrift sink and server elements.
+- */
+-public class PerfThriftSinks implements ExamplePerfData {
+-
+-  /**
+-   * Pipeline is:
+-   * 
+-   * text -> mem
+-   * 
+-   * mem -> ThriftEventSink -> ThriftEventSource -> NullSink
+-   * 
+-   * @throws InterruptedException
+-   */
+-  @Test
+-  public void testThriftSend() throws IOException, InterruptedException {
+-
+-    Benchmark b = new Benchmark("nullsink");
+-
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    FlumeConfiguration conf = FlumeConfiguration.get();
+-    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
+-    tes.open();
+-    // need to drain the sink otherwise its queue will fill up with events!
+-    Thread drain = new Thread("drain") {
+-      public void run() {
+-        try {
+-          EventUtil.dumpAll(tes, new NullSink());
+-        } catch (Exception e) {
+-          // TODO Auto-generated catch block
+-          e.printStackTrace();
+-        }
+-      }
+-    };
+-    drain.start(); // drain the sink.
+-    b.mark("receiver_started");
+-
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
+-    snk.open();
+-    b.mark("sink_started");
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark("thrift sink to thrift source done");
+-
+-    tes.close();
+-    snk.close();
+-    drain.interrupt();
+-    b.done();
+-  }
+-
+-  /**
+-   * This is slighlty different by using another thread to kick off the sink. It
+-   * shouldn't really matter much.
+-   * 
+-   * Pipeline is:
+-   * 
+-   * text -> mem
+-   * 
+-   * mem -> ThriftEventSink -> ThriftEventSource -> NullSink
+-   **/
+-  @Test
+-  public void testThriftSendMulti() throws IOException, InterruptedException {
+-
+-    Benchmark b = new Benchmark("nullsink");
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    FlumeConfiguration conf = FlumeConfiguration.get();
+-    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
+-    tes.open();
+-    // need to drain the sink otherwise its queue will fill up with events!
+-    Thread drain = new Thread("drain") {
+-      public void run() {
+-        try {
+-          EventUtil.dumpAll(tes, new NullSink());
+-        } catch (Exception e) {
+-          // TODO Auto-generated catch block
+-          e.printStackTrace();
+-        }
+-      }
+-    };
+-    drain.start(); // drain the sink.
+-    b.mark("receiver_started");
+-
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
+-
+-    Thread t = new Thread() {
+-      public void run() {
+-        try {
+-          snk.open();
+-        } catch (IOException e) {
+-          // TODO Auto-generated catch block
+-          e.printStackTrace();
+-        }
+-      }
+-    };
+-    t.start();
+-    b.mark("sink_started");
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark("thrift sink to thrift source done");
+-
+-    Thread.sleep(1000);
+-    tes.close();
+-    snk.close();
+-    t.interrupt();
+-    drain.interrupt();
+-    b.done();
+-  }
+-
+-  /**
+-   * Here we are using the ThriftRawEventSink instead of the ThriftEventSink
+-   * 
+-   * Pipeline is:
+-   * 
+-   * text -> mem
+-   * 
+-   * mem -> ThriftRawEventSink -> ThriftEventSource -> NullSink
+-   * 
+-   * @throws InterruptedException
+-   */
+-  @Test
+-  public void testThriftRawSend() throws IOException, InterruptedException {
+-
+-    Benchmark b = new Benchmark("nullsink");
+-
+-    b.mark("begin");
+-
+-    TextFileSource txt = new TextFileSource(HADOOP_DATA[0]);
+-    txt.open();
+-    MemorySinkSource mem = new MemorySinkSource();
+-    mem.open();
+-    EventUtil.dumpAll(txt, mem);
+-    txt.close();
+-    b.mark("disk_loaded");
+-
+-    FlumeConfiguration conf = FlumeConfiguration.get();
+-    final ThriftEventSource tes = new ThriftEventSource(conf.getCollectorPort());
+-    tes.open();
+-    // need to drain the sink otherwise its queue will fill up with events!
+-    Thread drain = new Thread("drain") {
+-      public void run() {
+-        try {
+-          EventUtil.dumpAll(tes, new NullSink());
+-        } catch (Exception e) {
+-          // TODO Auto-generated catch block
+-          e.printStackTrace();
+-        }
+-      }
+-    };
+-    drain.start(); // drain the sink.
+-    b.mark("receiver_started");
+-
+-    final ThriftEventSink snk = new ThriftEventSink("0.0.0.0", conf
+-        .getCollectorPort());
+-    snk.open();
+-    b.mark("sink_started");
+-
+-    EventUtil.dumpAll(mem, snk);
+-    b.mark("thrift sink to thrift source done");
+-
+-    tes.close();
+-    snk.close();
+-    drain.interrupt();
+-    b.done();
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/agent/BenchmarkAgentDecos.java b/src/javaperf/com/cloudera/flume/agent/BenchmarkAgentDecos.java
+deleted file mode 100644
+index 02b0e1b..0000000
+--- a/src/javaperf/com/cloudera/flume/agent/BenchmarkAgentDecos.java
++++ /dev/null
+@@ -1,74 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.agent;
+-
+-import java.io.IOException;
+-
+-import org.apache.log4j.Level;
+-import org.apache.log4j.Logger;
+-import org.junit.Before;
+-import org.junit.Test;
+-
+-import com.cloudera.flume.conf.FlumeSpecException;
+-import com.cloudera.util.BenchmarkHarness;
+-
+-public class BenchmarkAgentDecos {
+-
+-  /**
+-   * Logs output to stderr, this should mute them unless they are serious.
+-   */
+-  @Before
+-  public void muteLogs() {
+-    Logger.getRootLogger().setLevel(Level.WARN);
+-  }
+-
+-  @Test
+-  public void tiny() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.tiny);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover", BenchmarkHarness.tiny);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead", BenchmarkHarness.tiny);
+-  }
+-
+-  @Test
+-  public void nullDecorator() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("nullDeco", BenchmarkHarness.varyValSize);
+-  }
+-
+-  @Test
+-  public void dfoDecorator2() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("diskFailover",
+-        BenchmarkHarness.varyValSize);
+-  }
+-
+-  @Test
+-  public void e2eDecorator() throws FlumeSpecException, IOException, InterruptedException {
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyMsgBytes);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyNumAttrs);
+-    BenchmarkHarness.doDecoBenchmark("ackedWriteAhead",
+-        BenchmarkHarness.varyValSize);
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/flume/agent/BenchmarkBasicDecos.java b/src/javaperf/com/cloudera/flume/agent/BenchmarkBasicDecos.java
+deleted file mode 100644
+index 7035dbe..0000000
+--- a/src/javaperf/com/cloudera/flume/agent/BenchmarkBasicDecos.java
++++ /dev/null
+@@ -1,48 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.agent;
+-
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.conf.FlumeSpecException;
+-import com.cloudera.util.BenchmarkHarness;
+-
+-/**
+- * Benchmark tests on basic decorators.
+- */
+-public class BenchmarkBasicDecos {
+-  String[] decos = { "nullDeco", "ackInjector", "ackChecker", };
+-
+-  String[] batching = { "batch(10)", "batch(100)", "batch(1000)" };
+-
+-  // TODO (jon) new decorator chaining notation
+-  // String[] gzips = { "batch(10) gzip", "batch(100) gzip", "batch(1000) gzip"
+-  // };
+-
+-  @Test
+-  public void basicDecorator() throws FlumeSpecException, IOException,
+-      InterruptedException {
+-    for (String d : decos) {
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyMsgBytes);
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyNumAttrs);
+-      BenchmarkHarness.doDecoBenchmark(d, BenchmarkHarness.varyValSize);
+-    }
+-  }
+-}
+diff --git a/src/javaperf/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java b/src/javaperf/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
+deleted file mode 100644
+index 630a913..0000000
+--- a/src/javaperf/com/cloudera/flume/handlers/syslog/PerfSyslogWireExtract.java
++++ /dev/null
+@@ -1,255 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.flume.handlers.syslog;
+-
+-import java.io.ByteArrayInputStream;
+-import java.io.ByteArrayOutputStream;
+-import java.io.DataInputStream;
+-import java.io.EOFException;
+-import java.io.IOException;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.flume.core.Event;
+-import com.cloudera.flume.handlers.debug.NoNlSynthSource;
+-import com.cloudera.flume.handlers.text.EventExtractException;
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * This demonstrates the rate that these different extractors work at.
+- * 
+- * test on the same machine"
+- * 
+- * Old method using regex: 1M messages, 100 bytes each, 8.4s => 11,9 MB/s (which
+- * is close to SyslogTcp socket throughput limit). (Apparently there were bugs
+- * in the regex)
+- * 
+- * 500MB / 41.0 s => `12.2 MB/s
+- * 
+- * New method using custom parser removing time syscalls: 1M message, 100 bytes,
+- * each, 5x
+- * 
+- * 500MB / 15.3 => 32.7 MB/s
+- */
+-public class PerfSyslogWireExtract {
+-
+-  /**
+-   * Generates a dataset, puts it into a memory buffer, and the uses the
+-   * DataInputStream machinery to read through it 100 bytes at a time.
+-   * 
+-   * 1M x 100 bytes, 5 times
+-   */
+-  @Test
+-  public void testNewExtractScan100() throws IOException, EventExtractException {
+-    Benchmark b = new Benchmark("new extract - scan 100 blocks");
+-
+-    b.mark("build dataset");
+-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+-    // 1M x 100 byte messages, 0 is the rand seed
+-    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
+-
+-    src.open();
+-    Event e = null;
+-    while ((e = src.next()) != null) {
+-      out.write("<33>".getBytes());
+-      out.write(e.getBody());
+-      out.write('\n');
+-    }
+-
+-    b.mark("start parsing dataset");
+-    int good = 0;
+-    int bad = 0;
+-    int lines = 0;
+-
+-    // We do this test 100 times!
+-    for (int i = 0; i < 5; i++) {
+-      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
+-          .toByteArray()));
+-      lines++;
+-      try {
+-        byte[] data = new byte[100];
+-        while (true)
+-          in.readFully(data);
+-      } catch (EOFException eof) {
+-        // expected.
+-      }
+-
+-    }
+-    b.mark("complete-good-bad", good, bad, lines);
+-    b.done();
+-  }
+-
+-  /**
+-   * Generates a dataset, puts it into a memory buffer, and the uses the
+-   * DataInputStream machinery to read through it 1000 bytes at a time.
+-   * 
+-   * 1M x 100 bytes, 5 times
+-   */
+-  @Test
+-  public void testNewExtractScan1000() throws IOException,
+-      EventExtractException {
+-    Benchmark b = new Benchmark("new extract - scan 1000 blocks");
+-
+-    b.mark("build dataset");
+-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+-    // 1M x 100 byte messages, 0 is the rand seed
+-    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
+-
+-    src.open();
+-    Event e = null;
+-    while ((e = src.next()) != null) {
+-      out.write("<33>".getBytes());
+-      out.write(e.getBody());
+-      out.write('\n');
+-    }
+-
+-    b.mark("start parsing dataset");
+-    int good = 0;
+-    int bad = 0;
+-    int lines = 0;
+-
+-    // We do this test 100 times!
+-    for (int i = 0; i < 5; i++) {
+-      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
+-          .toByteArray()));
+-      try {
+-        byte[] data = new byte[1000];
+-        while (true) {
+-          lines++;
+-
+-          in.readFully(data);
+-        }
+-      } catch (EOFException eof) {
+-        // expected.
+-      }
+-
+-    }
+-    b.mark("complete-good-bad", good, bad, lines);
+-    b.done();
+-  }
+-
+-  /**
+-   * Generates a dataset, puts it into a memory buffer, and the uses the
+-   * DataInputStream machinery to read through it one byte at a time.
+-   * 
+-   * 1M x 100 bytes, 5 times
+-   */
+-  @Test
+-  public void testNewExtractScan() throws IOException, EventExtractException {
+-    Benchmark b = new Benchmark("new extract - scan single byte");
+-
+-    b.mark("build dataset");
+-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+-    // 1M x 100 byte messages, 0 is the rand seed
+-    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
+-
+-    src.open();
+-    Event e = null;
+-    while ((e = src.next()) != null) {
+-      out.write("<33>".getBytes());
+-      out.write(e.getBody());
+-      out.write('\n');
+-    }
+-
+-    b.mark("start parsing dataset");
+-    int good = 0;
+-    int bad = 0;
+-    int lines = 0;
+-
+-    // We do this test 100 times!
+-    for (int i = 0; i < 5; i++) {
+-      DataInputStream in = new DataInputStream(new ByteArrayInputStream(out
+-          .toByteArray()));
+-      try {
+-        while (true) {
+-          lines++;
+-
+-          in.readByte();
+-        }
+-      } catch (EOFException eof) {
+-        // expected.
+-      }
+-
+-    }
+-    b.mark("complete-good-bad", good, bad, lines);
+-    b.done();
+-  }
+-
+-  /**
+-   * Generates a dataset, puts it into a memory buffer, and the uses the
+-   * DataInputStream machinery to read through it one parsed record at a time.
+-   */
+-  @Test
+-  public void testNewExtract() throws IOException, EventExtractException {
+-    Benchmark b = new Benchmark("regex extract");
+-
+-    b.mark("build dataset");
+-    ByteArrayOutputStream out = new ByteArrayOutputStream();
+-    // 1M x 100 byte messages, 0 is the rand seed
+-    NoNlSynthSource src = new NoNlSynthSource(1000000, 100, 0);
+-
+-    src.open();
+-    Event e = null;
+-    while ((e = src.next()) != null) {
+-      out.write("<33>".getBytes());
+-      out.write(e.getBody());
+-      out.write('\n');
+-    }
+-
+-    byte[] outbytes = out.toByteArray();
+-    System.out.println("Outbytes length : " + outbytes.length);
+-    b.mark("start parsing dataset");
+-    int good = 0;
+-    int bad = 0;
+-    int lines = 0;
+-
+-    // We do this test 50 times!
+-    for (int i = 0; i < 5; i++) {
+-      DataInputStream in = new DataInputStream(new ByteArrayInputStream(
+-          outbytes));
+-
+-      Event evt = null;
+-      while (true) {
+-        try {
+-          lines++;
+-          evt = SyslogWireExtractor.extractEvent(in);
+-          if (evt == null)
+-            break;
+-          good++;
+-        } catch (Exception eee) {
+-          bad++;
+-        }
+-      }
+-    }
+-    b.mark("complete-good-bad", good, bad, lines);
+-    b.done();
+-  }
+-
+-  /**
+-   * A harness so that the profiler can attach to the process.
+-   */
+-  static public void main(String[] argv) throws IOException,
+-      EventExtractException {
+-    // A harness for the profiler.
+-
+-    new PerfSyslogWireExtract().testNewExtract();
+-    // new PerfNewSyslogWireExtract().testOldExtract();
+-    // new PerfNewSyslogWireExtract().testNewBlockExtract();
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/testio/PerfStringAppends.java b/src/javaperf/com/cloudera/testio/PerfStringAppends.java
+deleted file mode 100644
+index 7b28930..0000000
+--- a/src/javaperf/com/cloudera/testio/PerfStringAppends.java
++++ /dev/null
+@@ -1,148 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.testio;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * There are three formats for handling blobs of data. Which is the most
+- * efficient, which are the most convenient and which are the cheapest to
+- * translate to and from?
+- * 
+- */
+-
+-// String --------> 1.3s 1.4 1.3 --------> 7.7Mops/s
+-// StringBuffer --> 1.2s 1.2 1.2 --------> 8.3Mops/s
+-// StringBuilder -> .75s 0.77 .78 ------> 13.0Mops/s
+-// StringFormat --> 13.9s 14.3 15.7 -----> 0.7Mops/s
+-
+-public class PerfStringAppends {
+-
+-  int times = 10000000;
+-
+-  String base = "this is a test";
+-
+-  @Test
+-  public void testStringAppend() {
+-    Benchmark b = new Benchmark("String Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      @SuppressWarnings("unused")
+-      String temp = base + i;
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringBufferAppend() {
+-    StringBuffer buf = new StringBuffer(base);
+-    Benchmark b = new Benchmark("StringBuffer Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      buf.append(i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringBuilderAppend() {
+-    StringBuilder buf = new StringBuilder(base);
+-    Benchmark b = new Benchmark("StringBuffer Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      buf.append(i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringFormat() {
+-    String format = "%s%d";
+-    Benchmark b = new Benchmark("StringFormatAppend");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      String.format(format, base, i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-
+-  }
+-
+-  @Test
+-  public void testStringAppend2() {
+-    Benchmark b = new Benchmark("String Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      @SuppressWarnings("unused")
+-      String temp = base + i;
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringBufferAppend2() {
+-    StringBuffer buf = new StringBuffer(base);
+-    Benchmark b = new Benchmark("StringBuffer Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      buf.append(i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringBuilderAppend2() {
+-    StringBuilder buf = new StringBuilder(base);
+-    Benchmark b = new Benchmark("StringBuffer Append");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      buf.append(i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringFormat2() {
+-    String format = "%s%d";
+-    Benchmark b = new Benchmark("StringFormatAppend");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      String.format(format, base, i);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-
+-  }
+-
+-}
+diff --git a/src/javaperf/com/cloudera/testio/PerfStringTrans.java b/src/javaperf/com/cloudera/testio/PerfStringTrans.java
+deleted file mode 100644
+index 4724525..0000000
+--- a/src/javaperf/com/cloudera/testio/PerfStringTrans.java
++++ /dev/null
+@@ -1,113 +0,0 @@
+-/**
+- * Licensed to Cloudera, Inc. under one
+- * or more contributor license agreements.  See the NOTICE file
+- * distributed with this work for additional information
+- * regarding copyright ownership.  Cloudera, Inc. licenses this file
+- * to you under the Apache License, Version 2.0 (the
+- * "License"); you may not use this file except in compliance
+- * with the License.  You may obtain a copy of the License at
+- *
+- *     http://www.apache.org/licenses/LICENSE-2.0
+- *
+- * Unless required by applicable law or agreed to in writing, software
+- * distributed under the License is distributed on an "AS IS" BASIS,
+- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+- * See the License for the specific language governing permissions and
+- * limitations under the License.
+- */
+-package com.cloudera.testio;
+-
+-import java.nio.ByteBuffer;
+-
+-import org.junit.Test;
+-
+-import com.cloudera.util.Benchmark;
+-
+-/**
+- * This is a performance test to see how expensive different string/byte
+- * translations cost
+- */
+-public class PerfStringTrans  {
+-  int times = 10000000;
+-
+-  String base = "this is a test";
+-
+-  @Test
+-  public void testStringToByteArray() {
+-    Benchmark b = new Benchmark("String to ByteArray");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      base.getBytes();
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringToWrapByteBuffer() {
+-    Benchmark b = new Benchmark("String wrap ByteBuf");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      ByteBuffer.wrap(base.getBytes());
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-
+-  }
+-
+-  @Test
+-  public void testStringtoByteBufferCopy() {
+-    Benchmark b = new Benchmark("String alloc ByteBuf");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      byte[] buf = base.getBytes();
+-      ByteBuffer bb = ByteBuffer.allocate(buf.length);
+-      bb.put(buf);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringToByteArray2() {
+-    Benchmark b = new Benchmark("String to ByteArray");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      base.getBytes();
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-  @Test
+-  public void testStringToWrapByteBuffer2() {
+-    Benchmark b = new Benchmark("String wrap ByteBuf");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      ByteBuffer.wrap(base.getBytes());
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-
+-  }
+-
+-  @Test
+-  public void testStringtoByteBufferCopy2() {
+-    Benchmark b = new Benchmark("String alloc ByteBuf");
+-
+-    b.mark("begin");
+-    for (int i = 0; i < times; i++) {
+-      byte[] buf = base.getBytes();
+-      ByteBuffer bb = ByteBuffer.allocate(buf.length);
+-      bb.put(buf);
+-    }
+-    b.mark("after " + times);
+-    b.done();
+-  }
+-
+-}
+-- 
+1.7.0.4
+
